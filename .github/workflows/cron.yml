@@ -1,5 +1,5 @@
 ---
-name: Vul DB
+name: Tunnel DB
 on:
   schedule:
     - cron: '0 */6 * * *'

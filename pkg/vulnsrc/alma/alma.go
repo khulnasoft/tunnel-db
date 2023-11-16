@@ -37,7 +37,7 @@ type PutInput struct {
 	CveID        string
 	Vuln         types.VulnerabilityDetail
 	Advisories   map[string]types.Advisory
-	Erratum      Erratum // for extensibility, not used in vul-db
+	Erratum      Erratum // for extensibility, not used in tunnel-db
 }
 
 type DB interface {
@@ -47,7 +47,7 @@ type DB interface {
 }
 
 type VulnSrc struct {
-	DB // Those who want to customize Vul DB can override put/get methods.
+	DB // Those who want to customize Tunnel DB can override put/get methods.
 }
 
 // Alma implements the DB interface

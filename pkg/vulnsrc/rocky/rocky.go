@@ -48,7 +48,7 @@ type PutInput struct {
 	CveID        string
 	Vuln         types.VulnerabilityDetail
 	Advisories   map[string]types.Advisories // pkg name => advisory
-	Erratum      RLSA                        // for extensibility, not used in vul-db
+	Erratum      RLSA                        // for extensibility, not used in tunnel-db
 }
 
 type DB interface {
@@ -89,7 +89,7 @@ func (vs *VulnSrc) Update(dir string) error {
 }
 
 // parse parses all the advisories from Rocky Linux.
-// It is exported for those who want to customize vul-db.
+// It is exported for those who want to customize tunnel-db.
 func (vs *VulnSrc) parse(rootDir string) (map[string][]RLSA, error) {
 	errata := map[string][]RLSA{}
 	err := utils.FileWalk(rootDir, func(r io.Reader, path string) error {
@@ -273,7 +273,7 @@ func (r *Rocky) Get(release, pkgName, arch string) ([]types.Advisory, error) {
 		}
 
 		// For backward compatibility
-		// The old vul-db has no entries, but has fixed versions and custom fields.
+		// The old tunnel-db has no entries, but has fixed versions and custom fields.
 		if len(adv.Entries) == 0 {
 			advisories = append(advisories, types.Advisory{
 				VulnerabilityID: vulnID,

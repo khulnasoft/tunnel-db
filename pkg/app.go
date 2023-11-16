@@ -13,9 +13,9 @@ type AppConfig struct{}
 
 func (ac *AppConfig) NewApp(version string) *cli.App {
 	app := cli.NewApp()
-	app.Name = "vul-db"
+	app.Name = "tunnel-db"
 	app.Version = version
-	app.Usage = "Vul DB builder"
+	app.Usage = "Tunnel DB builder"
 
 	app.Commands = []cli.Command{
 		{

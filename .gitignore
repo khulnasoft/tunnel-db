@@ -20,5 +20,5 @@ coverage.txt
 assets
 cache
 
-# vul-db Outputs
-vul-db
+# tunnel-db Outputs
+tunnel-db

@@ -1,4 +1,4 @@
-# vul-db 
+# tunnel-db 
 
 ![Build DB](https://github.com/khulnasoft-lab/tunnel-db/workflows/Vul%20DB/badge.svg)
 [![GitHub Release][release-img]][release]
@@ -19,19 +19,19 @@
 [license]: https://github.com/khulnasoft-lab/tunnel-db/blob/main/LICENSE
 
 ## Overview
-`vul-db` is a CLI tool and a library to manipulate Vul DB.
+`tunnel-db` is a CLI tool and a library to manipulate Tunnel DB.
 
 ### Library
-Vul uses `vul-db` internally to manipulate vulnerability DB. This DB has vulnerability information from NVD, Red Hat, Debian, etc.
+Vul uses `tunnel-db` internally to manipulate vulnerability DB. This DB has vulnerability information from NVD, Red Hat, Debian, etc.
 
 ### CLI
-The `vul-db` CLI tool builds vulnerability DBs. A [GitHub Actions workflow](.github/workflows/cron.yml)
-periodically builds a fresh version of the vulnerability DB using `vul-db` and uploads it to the GitHub
+The `tunnel-db` CLI tool builds vulnerability DBs. A [GitHub Actions workflow](.github/workflows/cron.yml)
+periodically builds a fresh version of the vulnerability DB using `tunnel-db` and uploads it to the GitHub
 Container Registry (see [Download the vulnerability database](#download-the-vulnerability-database) below).
 
 ```
 NAME:
-   vul-db - Vul DB builder
+   tunnel-db - Tunnel DB builder
 
 USAGE:
    main [global options] command [command options] image_name
@@ -51,7 +51,7 @@ GLOBAL OPTIONS:
 ### Building the DB
 You can utilize `make db-all` to build the database, the DB artifact is outputted to the assets folder.
 
-Alternatively Docker is supported, you can run `docker build . -t vul-db`.
+Alternatively Docker is supported, you can run `docker build . -t tunnel-db`.
 
 If you want to build a vul integration test DB, please run `make create-test-db`
 
@@ -60,12 +60,12 @@ Every 6 hours
 
 ## Download the vulnerability database
 ### version 1 (deprecated)
-Vul DB v1 reached the end of support on February 2023. Please upgrade Vul to v0.23.0 or later.
+Tunnel DB v1 reached the end of support on February 2023. Please upgrade Vul to v0.23.0 or later.
 
-Read more about the Vul DB v1 deprecation in [the discussion](https://github.com/khulnasoft-lab/vul/discussions/1653).
+Read more about the Tunnel DB v1 deprecation in [the discussion](https://github.com/khulnasoft-lab/vul/discussions/1653).
 
 ### version 2
-Vul DB v2 is hosted on [GHCR](https://github.com/orgs/khulnasoft-lab/packages/container/package/vul-db).
+Tunnel DB v2 is hosted on [GHCR](https://github.com/orgs/khulnasoft-lab/packages/container/package/tunnel-db).
 Although GitHub displays the `docker pull` command by default, please note that it cannot be downloaded using `docker pull` as it is not a container image.
 
 You can download the actual compiled database via [Vul](https://khulnasoft-lab.github.io/vul/) or [Oras CLI](https://oras.land/cli/).

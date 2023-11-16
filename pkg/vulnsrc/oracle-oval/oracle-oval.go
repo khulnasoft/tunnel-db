@@ -36,7 +36,7 @@ type PutInput struct {
 	VulnID     string                             // CVE-ID or ELSA-ID
 	Vuln       types.VulnerabilityDetail          // vulnerability detail such as CVSS and description
 	Advisories map[AffectedPackage]types.Advisory // pkg => advisory
-	OVAL       OracleOVAL                         // for extensibility, not used in vul-db
+	OVAL       OracleOVAL                         // for extensibility, not used in tunnel-db
 }
 
 type DB interface {
@@ -46,7 +46,7 @@ type DB interface {
 }
 
 type VulnSrc struct {
-	DB // Those who want to customize Vul DB can override put/get methods.
+	DB // Those who want to customize Tunnel DB can override put/get methods.
 }
 
 type Oracle struct {
@@ -77,7 +77,7 @@ func (vs *VulnSrc) Update(dir string) error {
 }
 
 // Parse parses all the advisories from Alma Linux.
-// It is exported for those who want to customize vul-db.
+// It is exported for those who want to customize tunnel-db.
 func (vs *VulnSrc) parse(rootDir string) ([]OracleOVAL, error) {
 	var ovals []OracleOVAL
 	err := utils.FileWalk(rootDir, func(r io.Reader, path string) error {

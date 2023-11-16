@@ -46,7 +46,7 @@ lintfix: $(GOBIN)/golangci-lint
 
 .PHONY: build
 build:
-	go build $(LDFLAGS) ./cmd/vul-db
+	go build $(LDFLAGS) ./cmd/tunnel-db
 
 .PHONY: clean
 clean:
@@ -55,7 +55,7 @@ clean:
 $(GOBIN)/bbolt:
 	go install go.etcd.io/bbolt/cmd/bbolt@v1.3.5
 
-vul-db:
+tunnel-db:
 	make build
 
 .PHONY: db-fetch-langs
@@ -70,8 +70,8 @@ db-fetch-langs:
 	wget -qO - https://github.com/CocoaPods/Specs/archive/master.tar.gz | tar xz -C cache/cocoapods-specs --strip-components=1
 
 .PHONY: db-build
-db-build: vul-db
-	./vul-db build --cache-dir cache --update-interval 6h
+db-build: tunnel-db
+	./tunnel-db build --cache-dir cache --update-interval 6h
 
 .PHONY: db-compact
 db-compact: $(GOBIN)/bbolt cache/db/vul.db

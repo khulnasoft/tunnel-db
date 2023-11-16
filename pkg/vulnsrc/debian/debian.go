@@ -449,7 +449,7 @@ func (vs VulnSrc) putAdvisory(tx *bolt.Tx, bkt bucket, advisory Advisory) error 
 	return nil
 }
 
-// defaultPut puts the advisory into Vul DB, but it can be overwritten.
+// defaultPut puts the advisory into Tunnel DB, but it can be overwritten.
 func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 	adv, ok := advisory.(Advisory)
 	if !ok {
