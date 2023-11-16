@@ -13,11 +13,11 @@ import (
 	"golang.org/x/xerrors"
 
 	debver "github.com/khulnasoft-lab/go-deb-version"
-	"github.com/khulnasoft-lab/vul-db/pkg/db"
-	"github.com/khulnasoft-lab/vul-db/pkg/types"
-	"github.com/khulnasoft-lab/vul-db/pkg/utils"
-	ustrings "github.com/khulnasoft-lab/vul-db/pkg/utils/strings"
-	"github.com/khulnasoft-lab/vul-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/utils"
+	ustrings "github.com/khulnasoft-lab/tunnel-db/pkg/utils/strings"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 const (

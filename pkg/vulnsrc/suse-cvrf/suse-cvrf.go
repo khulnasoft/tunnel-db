@@ -13,10 +13,10 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/khulnasoft-lab/goversion/pkg/version"
-	"github.com/khulnasoft-lab/vul-db/pkg/db"
-	"github.com/khulnasoft-lab/vul-db/pkg/types"
-	"github.com/khulnasoft-lab/vul-db/pkg/utils"
-	"github.com/khulnasoft-lab/vul-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/utils"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 type Distribution int
@@ -247,7 +247,7 @@ func getPackage(packVer string) *Package {
 	}
 }
 
-// reference: https://github.com/khulnasoft-lab/vul-db/blob/5c844be3ba6b9ef13df640857a10f8737e360feb/pkg/vulnsrc/redhat/redhat.go#L196-L217
+// reference: https://github.com/khulnasoft-lab/tunnel-db/blob/5c844be3ba6b9ef13df640857a10f8737e360feb/pkg/vulnsrc/redhat/redhat.go#L196-L217
 func splitPkgName(pkgName string) (string, string) {
 	var version string
 

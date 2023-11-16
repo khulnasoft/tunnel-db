@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/khulnasoft-lab/vul-db/pkg/db"
-	"github.com/khulnasoft-lab/vul-db/pkg/dbtest"
-	"github.com/khulnasoft-lab/vul-db/pkg/types"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/dbtest"
+	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
 )
 
 func TestConfig_SaveAdvisoryDetails(t *testing.T) {
