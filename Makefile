@@ -74,15 +74,15 @@ db-build: tunnel-db
 	./tunnel-db build --cache-dir cache --update-interval 6h
 
 .PHONY: db-compact
-db-compact: $(GOBIN)/bbolt cache/db/vul.db
+db-compact: $(GOBIN)/bbolt cache/db/tunnel.db
 	mkdir -p assets/
-	$(GOBIN)/bbolt compact -o ./assets/vul.db cache/db/vul.db
+	$(GOBIN)/bbolt compact -o ./assets/tunnel.db cache/db/tunnel.db
 	cp cache/db/metadata.json ./assets/metadata.json
 	rm -rf cache/db
 
 .PHONY: db-compress
-db-compress: assets/vul.db assets/metadata.json
-	tar cvzf assets/db.tar.gz -C assets/ vul.db metadata.json
+db-compress: assets/tunnel.db assets/metadata.json
+	tar cvzf assets/db.tar.gz -C assets/ tunnel.db metadata.json
 
 .PHONY: db-clean
 db-clean:
