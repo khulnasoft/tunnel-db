@@ -196,7 +196,7 @@ func (vs *VulnSrc) commit(tx *bolt.Tx, platformName string, errata []RLSA) error
 				} else {
 					input.Advisories[pkg.Name] = types.Advisories{
 						// will save `0.0.0` version for non-`x86_64` arch
-						// to avoid false positives when using old Vul with new database
+						// to avoid false positives when using old Tunnel with new database
 						FixedVersion: fixedVersion("0.0.0", entry.FixedVersion, pkg.Arch), // For backward compatibility
 						Entries:      []types.Advisory{entry},
 					}
@@ -222,7 +222,7 @@ func (vs *VulnSrc) commit(tx *bolt.Tx, platformName string, errata []RLSA) error
 			input.PlatformName = platformName
 			input.CveID = cveID
 			input.Vuln = vuln
-			input.Erratum = erratum // For Vul Premium
+			input.Erratum = erratum // For Tunnel Premium
 
 			savedInputs[cveID] = input
 		}

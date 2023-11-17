@@ -34,7 +34,7 @@ var (
 		"GMS",
 	}
 
-	// Mapping between GLAD slug and Vul ecosystem
+	// Mapping between GLAD slug and Tunnel ecosystem
 	ecosystems = map[packageType]types.Ecosystem{
 		Conan: vulnerability.Conan,
 	}

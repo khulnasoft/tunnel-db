@@ -195,7 +195,7 @@ func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 	return nil
 }
 
-// SeverityFromPriority converts Ubuntu priority into Vul severity
+// SeverityFromPriority converts Ubuntu priority into Tunnel severity
 func SeverityFromPriority(priority string) types.Severity {
 	switch priority {
 	case "untriaged":

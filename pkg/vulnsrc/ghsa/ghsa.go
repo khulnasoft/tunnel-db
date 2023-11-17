@@ -22,7 +22,7 @@ const (
 var (
 	ghsaDir = filepath.Join("ghsa", "advisories", "github-reviewed")
 
-	// Mapping between Vul ecosystem and GHSA ecosystem
+	// Mapping between Tunnel ecosystem and GHSA ecosystem
 	ecosystems = map[types.Ecosystem]string{
 		vulnerability.Composer:  "Composer",
 		vulnerability.Go:        "Go",

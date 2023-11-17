@@ -53,7 +53,7 @@ You can utilize `make db-all` to build the database, the DB artifact is outputte
 
 Alternatively Docker is supported, you can run `docker build . -t tunnel-db`.
 
-If you want to build a vul integration test DB, please run `make create-test-db`
+If you want to build a tunnel integration test DB, please run `make create-test-db`
 
 ## Update interval
 Every 6 hours
@@ -73,7 +73,7 @@ You can download the actual compiled database via [Tunnel](https://khulnasoft-la
 Tunnel:
 ```sh
 TUNNEL_TEMP_DIR=$(mktemp -d)
-vul --cache-dir $TUNNEL_TEMP_DIR image --download-db-only
+tunnel --cache-dir $TUNNEL_TEMP_DIR image --download-db-only
 tar -cf ./db.tar.gz -C $TUNNEL_TEMP_DIR/db metadata.json tunnel.db
 rm -rf $TUNNEL_TEMP_DIR
 ```
