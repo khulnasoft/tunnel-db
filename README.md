@@ -1,6 +1,6 @@
 # tunnel-db 
 
-![Build DB](https://github.com/khulnasoft-lab/tunnel-db/workflows/Vul%20DB/badge.svg)
+![Build DB](https://github.com/khulnasoft-lab/tunnel-db/workflows/Tunnel%20DB/badge.svg)
 [![GitHub Release][release-img]][release]
 ![Downloads][download]
 [![Go Report Card][report-card-img]][report-card]
@@ -22,7 +22,7 @@
 `tunnel-db` is a CLI tool and a library to manipulate Tunnel DB.
 
 ### Library
-Vul uses `tunnel-db` internally to manipulate vulnerability DB. This DB has vulnerability information from NVD, Red Hat, Debian, etc.
+Tunnel uses `tunnel-db` internally to manipulate vulnerability DB. This DB has vulnerability information from NVD, Red Hat, Debian, etc.
 
 ### CLI
 The `tunnel-db` CLI tool builds vulnerability DBs. A [GitHub Actions workflow](.github/workflows/cron.yml)
@@ -60,7 +60,7 @@ Every 6 hours
 
 ## Download the vulnerability database
 ### version 1 (deprecated)
-Tunnel DB v1 reached the end of support on February 2023. Please upgrade Vul to v0.23.0 or later.
+Tunnel DB v1 reached the end of support on February 2023. Please upgrade Tunnel to v0.23.0 or later.
 
 Read more about the Tunnel DB v1 deprecation in [the discussion](https://github.com/khulnasoft-lab/vul/discussions/1653).
 
@@ -68,9 +68,9 @@ Read more about the Tunnel DB v1 deprecation in [the discussion](https://github.
 Tunnel DB v2 is hosted on [GHCR](https://github.com/orgs/khulnasoft-lab/packages/container/package/tunnel-db).
 Although GitHub displays the `docker pull` command by default, please note that it cannot be downloaded using `docker pull` as it is not a container image.
 
-You can download the actual compiled database via [Vul](https://khulnasoft-lab.github.io/vul/) or [Oras CLI](https://oras.land/cli/).
+You can download the actual compiled database via [Tunnel](https://khulnasoft-lab.github.io/vul/) or [Oras CLI](https://oras.land/cli/).
 
-Vul:
+Tunnel:
 ```sh
 TUNNEL_TEMP_DIR=$(mktemp -d)
 vul --cache-dir $TUNNEL_TEMP_DIR image --download-db-only
