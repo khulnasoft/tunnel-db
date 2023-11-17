@@ -19,7 +19,7 @@ type VulnDB interface {
 	Build(targets []string) error
 }
 
-type VulDB struct {
+type TunnelDB struct {
 	dbc            db.Config
 	metadata       metadata.Client
 	vulnClient     vulnerability.Vulnerability
@@ -29,21 +29,21 @@ type VulDB struct {
 	clock          clock.Clock
 }
 
-type Option func(*VulDB)
+type Option func(*TunnelDB)
 
 func WithClock(clock clock.Clock) Option {
-	return func(core *VulDB) {
+	return func(core *TunnelDB) {
 		core.clock = clock
 	}
 }
 
 func WithVulnSrcs(srcs map[types.SourceID]vulnsrc.VulnSrc) Option {
-	return func(core *VulDB) {
+	return func(core *TunnelDB) {
 		core.vulnSrcs = srcs
 	}
 }
 
-func New(cacheDir string, updateInterval time.Duration, opts ...Option) *VulDB {
+func New(cacheDir string, updateInterval time.Duration, opts ...Option) *TunnelDB {
 	// Initialize map
 	vulnSrcs := map[types.SourceID]vulnsrc.VulnSrc{}
 	for _, v := range vulnsrc.All {
@@ -51,7 +51,7 @@ func New(cacheDir string, updateInterval time.Duration, opts ...Option) *VulDB {
 	}
 
 	dbc := db.Config{}
-	tdb := &VulDB{
+	tdb := &TunnelDB{
 		dbc:            dbc,
 		metadata:       metadata.NewClient(cacheDir),
 		vulnClient:     vulnerability.New(dbc),
@@ -68,7 +68,7 @@ func New(cacheDir string, updateInterval time.Duration, opts ...Option) *VulDB {
 	return tdb
 }
 
-func (t VulDB) Insert(targets []string) error {
+func (t TunnelDB) Insert(targets []string) error {
 	log.Println("Updating vulnerability database...")
 	for _, target := range targets {
 		src, ok := t.vulnSrc(target)
@@ -95,7 +95,7 @@ func (t VulDB) Insert(targets []string) error {
 	return nil
 }
 
-func (t VulDB) Build(targets []string) error {
+func (t TunnelDB) Build(targets []string) error {
 	// Insert all security advisories
 	if err := t.Insert(targets); err != nil {
 		return xerrors.Errorf("insert error: %w", err)
@@ -114,7 +114,7 @@ func (t VulDB) Build(targets []string) error {
 	return nil
 }
 
-func (t VulDB) vulnSrc(target string) (vulnsrc.VulnSrc, bool) {
+func (t TunnelDB) vulnSrc(target string) (vulnsrc.VulnSrc, bool) {
 	for _, src := range t.vulnSrcs {
 		if target == string(src.Name()) {
 			return src, true
@@ -123,7 +123,7 @@ func (t VulDB) vulnSrc(target string) (vulnsrc.VulnSrc, bool) {
 	return nil, false
 }
 
-func (t VulDB) optimize() error {
+func (t TunnelDB) optimize() error {
 	// NVD also contains many vulnerabilities that are not related to OS packages or language-specific packages.
 	// Tunnel DB will not store them so that it could reduce the database size.
 	// This bucket has only vulnerability IDs provided by vendors. They must be stored.
@@ -156,7 +156,7 @@ func (t VulDB) optimize() error {
 	return nil
 }
 
-func (t VulDB) cleanup() error {
+func (t TunnelDB) cleanup() error {
 	if err := t.dbc.DeleteVulnerabilityIDBucket(); err != nil {
 		return xerrors.Errorf("failed to delete severity bucket: %w", err)
 	}

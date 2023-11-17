@@ -34,7 +34,7 @@ func (f fakeVulnSrc) Update(dir string) error {
 	return nil
 }
 
-func TestVulDB_Insert(t *testing.T) {
+func TestTunnelDB_Insert(t *testing.T) {
 	type fields struct {
 		cacheDir string
 		clock    clock.Clock
@@ -120,7 +120,7 @@ func TestVulDB_Insert(t *testing.T) {
 	}
 }
 
-func TestVulDB_Build(t *testing.T) {
+func TestTunnelDB_Build(t *testing.T) {
 	modified := time.Date(2020, 8, 24, 17, 37, 0, 0, time.UTC)
 	published := time.Date(2019, 4, 7, 0, 29, 0, 0, time.UTC)
 
