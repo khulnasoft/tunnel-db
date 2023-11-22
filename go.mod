@@ -1,4 +1,4 @@
-module github.com/khulnasoft-lab/tunnel-db
+module github.com/khulnasoft/tunnel-db
 
 go 1.19
 

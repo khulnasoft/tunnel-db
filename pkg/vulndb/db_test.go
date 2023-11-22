@@ -14,13 +14,13 @@ import (
 	"k8s.io/utils/clock"
 	fake "k8s.io/utils/clock/testing"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/dbtest"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/metadata"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulndb"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/dbtest"
+	"github.com/khulnasoft/tunnel-db/pkg/metadata"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/vulndb"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 type fakeVulnSrc struct{}

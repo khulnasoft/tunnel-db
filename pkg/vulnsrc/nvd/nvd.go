@@ -12,10 +12,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/utils"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/utils"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 const (

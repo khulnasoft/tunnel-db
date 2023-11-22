@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/xerrors"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/db"
 )
 
 const metadataFile = "metadata.json"

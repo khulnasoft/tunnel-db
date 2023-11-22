@@ -5,8 +5,8 @@ import (
 
 	"github.com/urfave/cli"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/utils"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc"
+	"github.com/khulnasoft/tunnel-db/pkg/utils"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc"
 )
 
 type AppConfig struct{}

@@ -1,6 +1,6 @@
 package mariner
 
-import "github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/mariner/oval"
+import "github.com/khulnasoft/tunnel-db/pkg/vulnsrc/mariner/oval"
 
 type operator string
 

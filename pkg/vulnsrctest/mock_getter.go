@@ -3,7 +3,7 @@
 package vulnsrctest
 
 import (
-	types "github.com/khulnasoft-lab/tunnel-db/pkg/types"
+	types "github.com/khulnasoft/tunnel-db/pkg/types"
 	mock "github.com/stretchr/testify/mock"
 )
 

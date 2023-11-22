@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/utils/ints"
+	"github.com/khulnasoft/tunnel-db/pkg/utils/ints"
 )
 
 func TestHasIntersection(t *testing.T) {

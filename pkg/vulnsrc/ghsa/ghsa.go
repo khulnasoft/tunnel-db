@@ -8,9 +8,9 @@ import (
 
 	"golang.org/x/xerrors"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/osv"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/osv"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 const (

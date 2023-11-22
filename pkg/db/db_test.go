@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/db"
 )
 
 func TestInit(t *testing.T) {

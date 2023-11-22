@@ -11,8 +11,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/log"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/log"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
 )
 
 type CustomPut func(dbc Operation, tx *bolt.Tx, adv interface{}) error

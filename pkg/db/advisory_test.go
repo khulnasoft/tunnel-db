@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/db"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/dbtest"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/dbtest"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
 )
 
 func TestConfig_ForEachAdvisory(t *testing.T) {

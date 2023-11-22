@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/khulnasoft-lab/tunnel-db/pkg/types"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/alma"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrc/vulnerability"
-	"github.com/khulnasoft-lab/tunnel-db/pkg/vulnsrctest"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/alma"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrctest"
 )
 
 func TestVulnSrc_Update(t *testing.T) {
