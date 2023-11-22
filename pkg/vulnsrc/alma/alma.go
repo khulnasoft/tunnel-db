@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	version "github.com/khulnasoft-lab/go-rpm-version"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
 
-	version "github.com/khulnasoft-lab/go-rpm-version"
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
@@ -139,7 +139,7 @@ func (vs *VulnSrc) commit(tx *bolt.Tx, platformName string, errata []Erratum) er
 			}
 
 			// We need to work around this issue for now.
-			// https://github.com/khulnasoft-lab/fanal/issues/186#issuecomment-931523102
+			// https://github.com/khulnasoft/fanal/issues/186#issuecomment-931523102
 			advisories := map[string]types.Advisory{}
 
 			cveID := ref.ID

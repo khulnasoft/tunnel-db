@@ -61,7 +61,7 @@ jobs:
           ./oras version
           tags=(latest ${{ env.VERSION }})
           for tag in ${tags[@]}; do
-            ./oras push --artifact-type application/vnd.khulnasoft.vul.config.v1+json \
+            ./oras push --artifact-type application/vnd.khulnasoft.tunnel.config.v1+json \
               ghcr.io/${{ github.repository }}:${tag} \
               db.tar.gz:application/vnd.khulnasoft.tunnel.db.layer.v1.tar+gzip
           done

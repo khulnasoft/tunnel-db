@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	version "github.com/khulnasoft-lab/go-rpm-version"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
 
-	version "github.com/khulnasoft-lab/go-rpm-version"
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
