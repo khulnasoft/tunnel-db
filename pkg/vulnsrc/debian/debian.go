@@ -9,15 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	debver "github.com/khulnasoft-lab/go-deb-version"
-	bolt "go.etcd.io/bbolt"
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	ustrings "github.com/khulnasoft/tunnel-db/pkg/utils/strings"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
+	debver "github.com/khulnasoft-lab/go-deb-version"
 )
 
 const (

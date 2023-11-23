@@ -9,18 +9,17 @@ import (
 	"time"
 
 	"github.com/goark/go-cvss/v3/metric"
-	"github.com/samber/lo"
-	bolt "go.etcd.io/bbolt"
-	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/log"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/bucket"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	"github.com/samber/lo"
+	bolt "go.etcd.io/bbolt"
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
+	"golang.org/x/xerrors"
 )
 
 type Advisory struct {

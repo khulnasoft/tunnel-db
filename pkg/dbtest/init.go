@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/stretchr/testify/require"
 
 	fixtures "github.com/khulnasoft-lab/boltdb-fixtures"
-	"github.com/khulnasoft/tunnel-db/pkg/db"
 )
 
 func InitDB(t *testing.T, fixtureFiles []string) string {
