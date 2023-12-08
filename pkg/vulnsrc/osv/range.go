@@ -3,7 +3,7 @@ package osv
 import (
 	"fmt"
 
-	pep440 "github.com/aquasecurity/go-pep440-version"
+	pep440 "github.com/khulnasoft-lab/go-pep440-version"
 	mvn "github.com/masahiro331/go-mvn-version"
 	"golang.org/x/xerrors"
 

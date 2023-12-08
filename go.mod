@@ -22,15 +22,14 @@ require (
 )
 
 require (
-	github.com/aquasecurity/go-pep440-version v0.0.0-20210121094942-22b2f8951d46
 	github.com/khulnasoft-lab/boltdb-fixtures v1.0.0
 	github.com/khulnasoft-lab/go-gem-version v1.0.0
 	github.com/khulnasoft-lab/go-npm-version v1.0.0
+	github.com/khulnasoft-lab/go-pep440-version v1.0.0
 	github.com/khulnasoft-lab/goversion v1.0.1
 )
 
 require (
-	github.com/aquasecurity/go-version v0.0.0-20210121072130-637058cfe492 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/goark/errs v1.1.0 // indirect
