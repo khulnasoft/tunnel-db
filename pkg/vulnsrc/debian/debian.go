@@ -14,10 +14,9 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	ustrings "github.com/khulnasoft/tunnel-db/pkg/utils/strings"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	debver "github.com/knqyf263/go-deb-version"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
-
-	debver "github.com/khulnasoft-lab/go-deb-version"
 )
 
 const (

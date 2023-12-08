@@ -3,12 +3,12 @@ package osv
 import (
 	"fmt"
 
+	pep440 "github.com/aquasecurity/go-pep440-version"
 	mvn "github.com/masahiro331/go-mvn-version"
 	"golang.org/x/xerrors"
 
 	"github.com/khulnasoft-lab/go-gem-version"
-	"github.com/khulnasoft-lab/go-npm-version/pkg"
-	pep440 "github.com/khulnasoft-lab/go-pep440-version"
+	npm "github.com/khulnasoft-lab/go-npm-version/pkg"
 	"github.com/khulnasoft-lab/goversion/pkg/semver"
 	"github.com/khulnasoft-lab/goversion/pkg/version"
 )

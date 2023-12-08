@@ -13,10 +13,9 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	ustrings "github.com/khulnasoft/tunnel-db/pkg/utils/strings"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	version "github.com/knqyf263/go-rpm-version"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
-
-	version "github.com/khulnasoft-lab/go-rpm-version"
 )
 
 var (
