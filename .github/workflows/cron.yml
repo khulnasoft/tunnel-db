@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 env:
   REPO_OWNER: ${{ github.repository_owner }} # used in 'make db-build'
-  GH_USER: aqua-bot
+  GH_USER: khulnasoft-bot
   VERSION: 2
 jobs:
   build:
@@ -61,7 +61,7 @@ jobs:
           ./oras version
           tags=(latest ${{ env.VERSION }})
           for tag in ${tags[@]}; do
-            ./oras push --artifact-type application/vnd.aquasec.tunnel.config.v1+json \
+            ./oras push --artifact-type application/vnd.khulnasoftsec.tunnel.config.v1+json \
               ghcr.io/${{ github.repository }}:${tag} \
-              db.tar.gz:application/vnd.aquasec.tunnel.db.layer.v1.tar+gzip
+              db.tar.gz:application/vnd.khulnasoftsec.tunnel.db.layer.v1.tar+gzip
           done
