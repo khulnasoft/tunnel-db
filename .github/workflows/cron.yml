@@ -8,10 +8,11 @@ env:
   REPO_OWNER: ${{ secrets.DB_REPO }} # used in 'make db-build'
   GH_USER: khulnasoft-bot
   VERSION: 2
+  
 jobs:
   build:
     name: Build DB
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@v10
@@ -32,6 +33,7 @@ jobs:
 
       - name: Install bbolt
         run: go install go.etcd.io/bbolt/cmd/bbolt@v1.3.5
+
 
       - name: Download vuln-list and advisories
         run: make db-fetch-langs db-fetch-vuln-list
@@ -54,8 +56,8 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Packages Container registry
         uses: docker/login-action@v3
@@ -64,40 +66,49 @@ jobs:
           username: ${{ env.GH_USER }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to ECR
+        uses: docker/login-action@v3
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.ECR_ACCESS_KEY_ID }}
+          password: ${{ secrets.ECR_SECRET_ACCESS_KEY }}
+
       - name: Install oras
         run: |
-          curl -LO https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
-          tar -xvf ./oras_1.2.0_linux_amd64.tar.gz
+          # upgrade to ORAS 1.0.0
+          curl -LO https://github.com/oras-project/oras/releases/download/v1.0.0/oras_1.0.0_linux_amd64.tar.gz
+          tar -xvf ./oras_1.0.0_linux_amd64.tar.gz
+
 
       - name: Upload assets to registries
         run: |
           lowercase_repo=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "Starting artifact upload process..."
-
+          
           # Define an array of registry base URLs and their corresponding repository names
           declare -A registries=(
             ["ghcr.io"]="${lowercase_repo}"
             ["public.ecr.aws"]="${lowercase_repo}"
             ["docker.io"]="${lowercase_repo}"
           )
-
+          
           # Special case for docker.io if the organization is 'khulnasoft'
           if [[ "${lowercase_repo}" == "khulnasoft/"* ]]; then
             registries["docker.io"]="khulnasoft/${lowercase_repo#khulnasoft/}"
             echo "Docker Hub repository adjusted for khulnasoft: ${registries["docker.io"]}"
           fi
-
+          
           # Loop through each registry and push the artifact
           for registry in "${!registries[@]}"; do
             repo_name=${registries[$registry]}
             full_registry_url="${registry}/${repo_name}"
             echo "Processing registry: ${full_registry_url}"
-
+          
             tags=(latest ${{ env.VERSION }})
             for tag in "${tags[@]}"; do
               echo "Pushing artifact with tag: ${tag}"
-
-              if ./oras push --artifact-type application/vnd.khulnasoft.tunnel.config.v1+json \
+          
+              if oras push --artifact-type application/vnd.khulnasoft.tunnel.config.v1+json \
                 "${full_registry_url}:${tag}" \
                 db.tar.gz:application/vnd.khulnasoft.tunnel.db.layer.v1.tar+gzip; then
                 echo "Successfully pushed to ${full_registry_url}:${tag}"
@@ -109,15 +120,3 @@ jobs:
           done
             
           echo "Artifact upload process completed."
-
-      - name: Microsoft Teams Notification
-        ## Until the PR with the fix for the AdaptivCard version is merged yet
-        ## https://github.com/Skitionek/notify-microsoft-teams/pull/96
-        ## Use the khulnasoft fork
-        uses: khulnasoft-lab/notify-microsoft-teams@master
-        if: failure()
-        with:
-          webhook_url: ${{ secrets.TUNNEL_MSTEAMS_WEBHOOK }}
-          needs: ${{ toJson(needs) }}
-          job: ${{ toJson(job) }}
-          steps: ${{ toJson(steps) }}
