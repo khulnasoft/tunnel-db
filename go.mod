@@ -1,6 +1,6 @@
 module go.khulnasoft.com/tunnel-db
 
-go 1.22.0
+go 1.22
 
 require (
 	github.com/aquasecurity/go-version v0.0.0-20210121072130-637058cfe492
