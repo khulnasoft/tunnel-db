@@ -35,7 +35,7 @@ jobs:
       - name: Retry Git fetch
         run: |
           for i in {1..5}; do
-            git -c protocol.version=2 fetch --no-tags --prune --progress --no-recurse-submodules --depth=1 origin +refs/heads/github-releases*:refs/remotes/origin/github-releases* +refs/tags/github-releases*:refs/tags/github-releases* && break || sleep 15;
+            git -c protocol.version=2 fetch --no-tags --prune --progress --no-recurse-submodules --depth=1 origin +refs/heads/v1-2023020812*:refs/remotes/origin/v1-2023020812* +refs/tags/github-releases*:refs/tags/v1-2023020812* && break || sleep 15;
           done
 
       # Download vuln-list and advisories
