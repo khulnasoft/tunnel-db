@@ -9,7 +9,7 @@ GOPATH=$(shell go env GOPATH)
 GOBIN=$(GOPATH)/bin
 
 ifndef REPO_OWNER
-    REPO_OWNER=aquasecurity
+    REPO_OWNER=khulnasoft-lab
 endif
 
 u := $(if $(update),-u)
