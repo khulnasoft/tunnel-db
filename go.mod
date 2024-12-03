@@ -14,7 +14,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli v1.22.16
 	go.etcd.io/bbolt v1.3.11
-	golang.org/x/text v0.16.0
+	golang.org/x/text v0.20.0
 	golang.org/x/tools v0.27.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
