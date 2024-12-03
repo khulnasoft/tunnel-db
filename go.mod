@@ -11,10 +11,10 @@ require (
 	github.com/masahiro331/go-mvn-version v0.0.0-20210429150710-d3157d602a08
 	github.com/pandatix/go-cvss v0.6.2
 	github.com/samber/lo v1.47.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli v1.22.16
 	go.etcd.io/bbolt v1.3.11
-	golang.org/x/text v0.16.0
+	golang.org/x/text v0.20.0
 	golang.org/x/tools v0.27.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
