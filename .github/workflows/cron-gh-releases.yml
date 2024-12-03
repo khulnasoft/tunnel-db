@@ -19,7 +19,7 @@ jobs:
         run: go install go.etcd.io/bbolt/cmd/bbolt@v1.3.5
       # Check out "v1-2023020812" branch
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: "v1-2023020812"
           fetch-depth: 0  # Fetch entire history to avoid shallow fetch issues
