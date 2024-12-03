@@ -95,6 +95,8 @@ db-clean:
 db-fetch-vuln-list-main:
 	mkdir -p cache/vuln-list
 	wget -qO - https://github.com/khulnasoft-lab/vuln-list/archive/main.tar.gz | tar xz -C cache/vuln-list --strip-components=1
+	mkdir -p cache/vuln-list-redhat
+	wget -qO - https://github.com/khulnasoft-lab/vuln-list-redhat/archive/main.tar.gz | tar xz -C cache/vuln-list-redhat --strip-components=1
 
 .PHONY: db-fetch-vuln-list-fixed
 db-fetch-vuln-list-fixed:
