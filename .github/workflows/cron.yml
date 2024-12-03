@@ -121,7 +121,7 @@ jobs:
         ## Until the PR with the fix for the AdaptivCard version is merged yet
         ## https://github.com/Skitionek/notify-microsoft-teams/pull/96
         ## Use the khulnasoft fork
-        uses: khulnasoft/notify-microsoft-teams@master
+        uses: khulnasoft-lab/notify-microsoft-teams@master
         if: failure()
         with:
           webhook_url: ${{ secrets.TUNNEL_MSTEAMS_WEBHOOK }}
