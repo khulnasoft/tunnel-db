@@ -5,7 +5,7 @@ on:
     - cron: "0 */6 * * *"
   workflow_dispatch:
 env:
-  REPO_OWNER: khulnasoft-lab # used in 'make db-build'
+  REPO_OWNER: ${{ secrets.DB_REPO }} # used in 'make db-build'
   GH_USER: khulnasoft-bot
   VERSION: 2
 jobs:
