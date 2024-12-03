@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/aquasecurity/go-version v0.0.0-20210121072130-637058cfe492
-	github.com/briandowns/spinner v1.23.0
+	github.com/briandowns/spinner v1.23.1
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/knqyf263/go-deb-version v0.0.0-20190517075300-09fca494f03d
 	github.com/knqyf263/go-rpm-version v0.0.0-20170716094938-74609b86c936
