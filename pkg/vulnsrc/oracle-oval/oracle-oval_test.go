@@ -1,14 +1,19 @@
 package oracleoval
 
 import (
+	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrctest"
 )
 
 func TestMain(m *testing.M) {
@@ -17,572 +22,1261 @@ func TestMain(m *testing.M) {
 }
 
 func TestVulnSrc_Update(t *testing.T) {
-	tests := []struct {
-		name       string
-		dir        string
-		wantValues []vulnsrctest.WantValues
-		wantErr    string
+	testCases := []struct {
+		name           string
+		cacheDir       string
+		batchUpdateErr error
+		expectedError  error
+		expectedVulns  []types.Advisory
+	}{
+		{
+			name:     "happy path",
+			cacheDir: "testdata",
+		},
+		{
+			name:          "cache dir doesnt exist",
+			cacheDir:      "badpathdoesnotexist",
+			expectedError: errors.New("error in Oracle Linux OVAL walk: error in file walk: lstat badpathdoesnotexist/vuln-list/oval/oracle: no such file or directory"),
+		},
+		{
+			name:           "unable to save oracle linux oval defintions",
+			cacheDir:       "testdata",
+			batchUpdateErr: errors.New("unable to batch update"),
+			expectedError:  errors.New("error in Oracle Linux OVAL save: error in batch update: unable to batch update"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDBConfig := new(db.MockOperation)
+			mockDBConfig.On("BatchUpdate", mock.Anything).Return(tc.batchUpdateErr)
+			ac := VulnSrc{dbc: mockDBConfig}
+
+			err := ac.Update(tc.cacheDir)
+			switch {
+			case tc.expectedError != nil:
+				assert.EqualError(t, err, tc.expectedError.Error(), tc.name)
+			default:
+				assert.NoError(t, err, tc.name)
+			}
+		})
+	}
+}
+
+func TestVulnSrc_Commit(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		cves                   []OracleOVAL
+		putAdvisoryDetail      []db.OperationPutAdvisoryDetailExpectation
+		putVulnerabilityDetail []db.OperationPutVulnerabilityDetailExpectation
+		putSeverity            []db.OperationPutSeverityExpectation
+		expectedErrorMsg       string
 	}{
 		{
 			name: "happy path",
-			dir:  filepath.Join("testdata", "happy"),
-			wantValues: []vulnsrctest.WantValues{
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 5"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+					Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2007-0493", "Oracle Linux 5", "bind-devel"},
-					Value: types.Advisories{
-						FixedVersion: "30:9.3.3-8.el5",
-						Entries: []types.Advisory{
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "30:9.3.3-8.el5",
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-devel is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: "bind-devel is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
 							},
 						},
 					},
+					Severity: "MODERATE",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
+					},
+				},
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0493",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2007-0494", "Oracle Linux 5", "bind-devel"},
-					Value: types.Advisories{
-						FixedVersion: "30:9.3.3-8.el5",
-						Entries: []types.Advisory{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0494",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0493.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
+						},
+					},
+				},
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0494.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
+						},
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Severity:        types.SeverityUnknown,
+					},
+				},
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Severity:        types.SeverityUnknown,
+					},
+				},
+			},
+		},
+		{
+			name: "happy path duplicate reference",
+			cves: []OracleOVAL{
+				{
+					Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+					Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
+					},
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "30:9.3.3-8.el5",
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-devel is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: "bind-devel is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
 							},
 						},
 					},
+					Severity: "MODERATE",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
+					},
+				},
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0493",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2007-0493", "Oracle Linux 5", "bind-sdb"},
-					Value: types.Advisories{
-						FixedVersion: "30:9.3.3-8.el5",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "30:9.3.3-8.el5",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0494",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0493.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
 							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
 					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2007-0494", "Oracle Linux 5", "bind-sdb"},
-					Value: types.Advisories{
-						FixedVersion: "30:9.3.3-8.el5",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "30:9.3.3-8.el5",
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0494.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
 							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
 					},
 				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key: []string{"vulnerability-detail", "CVE-2007-0493", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
-						Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
-						References: []string{
-							"http://linux.oracle.com/cve/CVE-2007-0493.html",
-							"http://linux.oracle.com/errata/ELSA-2007-0057.html",
-						},
-						Severity: types.SeverityMedium,
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Severity:        types.SeverityUnknown,
 					},
 				},
 				{
-					Key: []string{"vulnerability-detail", "CVE-2007-0494", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
-						Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
-						References: []string{
-							"http://linux.oracle.com/cve/CVE-2007-0494.html",
-							"http://linux.oracle.com/errata/ELSA-2007-0057.html",
-						},
-						Severity: types.SeverityMedium,
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Severity:        types.SeverityUnknown,
 					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2007-0493"},
-					Value: map[string]interface{}{},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2007-0494"},
-					Value: map[string]interface{}{},
 				},
 			},
 		},
 		{
 			name: "happy path multi platform",
-			dir:  filepath.Join("testdata", "multi-platform"),
-			wantValues: []vulnsrctest.WantValues{
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 6"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-2019-4510: Unbreakable Enterprise kernel security update (IMPORTANT)",
+					Description: "[4.1.12-124.24.3]\n- ext4: update i_disksize when new eof exceeds it (Shan Hai)  [Orabug: 28940828] \n- ext4: update i_disksize if direct write past ondisk size (Eryu Guan)  [Orabug: 28940828] \n- ext4: protect i_disksize update by i_data_sem in direct write path (Eryu Guan)  [Orabug: 28940828] \n- ALSA: usb-audio: Fix UAF decrement if card has no live interfaces in card.c (Hui Peng)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Replace probing flag with active refcount (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Avoid nested autoresume calls (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ext4: validate that metadata blocks do not overlap superblock (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: update inline int ext4_has_metadata_csum(struct super_block *sb) (John Donnelly)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: always initialize the crc32c checksum driver (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094} {CVE-2018-1094}\n- Revert 'bnxt_en: Reduce default rings on multi-port cards.' (Brian Maly)  [Orabug: 28687746] \n- mlx4_core: Disable P_Key Violation Traps (Hakon Bugge)  [Orabug: 27693633] \n- rds: RDS connection does not reconnect after CQ access violation error (Venkat Venkatsubra)  [Orabug: 28733324]\n\n[4.1.12-124.24.2]\n- KVM/SVM: Allow direct access to MSR_IA32_SPEC_CTRL (KarimAllah Ahmed)  [Orabug: 28069548] \n- KVM/VMX: Allow direct access to MSR_IA32_SPEC_CTRL - reloaded (Mihai Carabas)  [Orabug: 28069548] \n- KVM/x86: Add IBPB support (Ashok Raj)  [Orabug: 28069548] \n- KVM: x86: pass host_initiated to functions that read MSRs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: make MSR bitmaps per-VCPU (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: introduce alloc_loaded_vmcs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: nVMX: Eliminate vmcs02 pool (Jim Mattson)  [Orabug: 28069548] \n- KVM: nVMX: fix msr bitmaps to prevent L2 from accessing L0 x2APIC (Radim Krcmar)  [Orabug: 28069548] \n- ocfs2: dont clear bh uptodate for block read (Junxiao Bi)  [Orabug: 28762940] \n- ocfs2: clear journal dirty flag after shutdown journal (Junxiao Bi)  [Orabug: 28924775] \n- ocfs2: fix panic due to unrecovered local alloc (Junxiao Bi)  [Orabug: 28924775] \n- net: rds: fix rds_ib_sysctl_max_recv_allocation error (Zhu Yanjun)  [Orabug: 28947481] \n- x86/speculation: Always disable IBRS in disable_ibrs_and_friends() (Alejandro Jimenez)  [Orabug: 29139710]",
+					Platform:    []string{"Oracle Linux 6", "Oracle Linux 7"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2019-4510.html",
+							ID:     "ELSA-2019-4510",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2018-1094.html",
+							ID:     "CVE-2018-1094",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2018-19824.html",
+							ID:     "CVE-2018-19824",
+						},
 					},
-				},
-				{
-					Key: []string{"data-source", "Oracle Linux 7"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
-					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2018-1094", "Oracle Linux 6", "kernel-uek-doc"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el6uek",
-						Entries: []types.Advisory{
+					Criteria: Criteria{
+						Operator: "OR",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "4.1.12-124.24.3.el6uek",
+								Operator: "AND",
+								Criterias: []Criteria{
+									{
+										Operator: "OR",
+										Criterias: []Criteria{
+											{
+												Operator:  "AND",
+												Criterias: nil,
+												Criterions: []Criterion{
+													{
+														Comment: "kernel-uek-doc is earlier than 0:4.1.12-124.24.3.el6uek",
+													},
+													{
+														Comment: "kernel-uek-doc is signed with the Oracle Linux 6 key",
+													},
+												},
+											},
+											{
+												Operator:  "AND",
+												Criterias: nil,
+												Criterions: []Criterion{
+													{
+														Comment: "kernel-uek-firmware is earlier than 0:4.1.12-124.24.3.el6uek",
+													},
+													{
+														Comment: "kernel-uek-firmware is signed with the Oracle Linux 6 key",
+													},
+												},
+											},
+										},
+										Criterions: nil,
+									},
+								},
+								Criterions: []Criterion{
+									{
+										Comment: "Oracle Linux 6 is installed",
+									},
+								},
+							},
+							{
+								Operator: "AND",
+								Criterias: []Criteria{
+									{
+										Operator: "OR",
+										Criterias: []Criteria{
+											{
+												Operator:  "AND",
+												Criterias: nil,
+												Criterions: []Criterion{
+													{
+														Comment: "kernel-uek-doc is earlier than 0:4.1.12-124.24.3.el7uek",
+													},
+													{
+														Comment: "kernel-uek-doc is signed with the Oracle Linux 7 key",
+													},
+												},
+											},
+											{
+												Operator:  "AND",
+												Criterias: nil,
+												Criterions: []Criterion{
+													{
+														Comment: "kernel-uek-firmware is earlier than 0:4.1.12-124.24.3.el7uek",
+													},
+													{
+														Comment: "kernel-uek-firmware is signed with the Oracle Linux 7 key",
+													},
+												},
+											},
+										},
+										Criterions: nil,
+									},
+								},
+								Criterions: []Criterion{
+									{
+										Comment: "Oracle Linux 7 is installed",
+									},
+								},
 							},
 						},
 					},
+					Severity: "IMPORTANT",
+					Cves: []Cve{
+						{
+							Impact: "CVE",
+							Href:   "http://linux.oracle.com/cve/CVE-2018-1094.html",
+							ID:     "CVE-2018-1094",
+						},
+						{
+							Impact: "CVE",
+							Href:   "http://linux.oracle.com/cve/CVE-2018-19824.html",
+							ID:     "CVE-2018-19824",
+						},
+					},
+				},
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 6",
+						PkgName:         "kernel-uek-doc",
+						VulnerabilityID: "CVE-2018-1094",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el6uek"},
+					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2018-19824", "Oracle Linux 6", "kernel-uek-doc"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el6uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el6uek",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 6",
+						PkgName:         "kernel-uek-doc",
+						VulnerabilityID: "CVE-2018-19824",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el6uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 6",
+						PkgName:         "kernel-uek-firmware",
+						VulnerabilityID: "CVE-2018-1094",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el6uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 6",
+						PkgName:         "kernel-uek-firmware",
+						VulnerabilityID: "CVE-2018-19824",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el6uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 7",
+						PkgName:         "kernel-uek-doc",
+						VulnerabilityID: "CVE-2018-1094",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el7uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 7",
+						PkgName:         "kernel-uek-doc",
+						VulnerabilityID: "CVE-2018-19824",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el7uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 7",
+						PkgName:         "kernel-uek-firmware",
+						VulnerabilityID: "CVE-2018-1094",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el7uek"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 7",
+						PkgName:         "kernel-uek-firmware",
+						VulnerabilityID: "CVE-2018-19824",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "4.1.12-124.24.3.el7uek"},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2018-1094",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[4.1.12-124.24.3]\n- ext4: update i_disksize when new eof exceeds it (Shan Hai)  [Orabug: 28940828] \n- ext4: update i_disksize if direct write past ondisk size (Eryu Guan)  [Orabug: 28940828] \n- ext4: protect i_disksize update by i_data_sem in direct write path (Eryu Guan)  [Orabug: 28940828] \n- ALSA: usb-audio: Fix UAF decrement if card has no live interfaces in card.c (Hui Peng)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Replace probing flag with active refcount (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Avoid nested autoresume calls (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ext4: validate that metadata blocks do not overlap superblock (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: update inline int ext4_has_metadata_csum(struct super_block *sb) (John Donnelly)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: always initialize the crc32c checksum driver (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094} {CVE-2018-1094}\n- Revert 'bnxt_en: Reduce default rings on multi-port cards.' (Brian Maly)  [Orabug: 28687746] \n- mlx4_core: Disable P_Key Violation Traps (Hakon Bugge)  [Orabug: 27693633] \n- rds: RDS connection does not reconnect after CQ access violation error (Venkat Venkatsubra)  [Orabug: 28733324]\n\n[4.1.12-124.24.2]\n- KVM/SVM: Allow direct access to MSR_IA32_SPEC_CTRL (KarimAllah Ahmed)  [Orabug: 28069548] \n- KVM/VMX: Allow direct access to MSR_IA32_SPEC_CTRL - reloaded (Mihai Carabas)  [Orabug: 28069548] \n- KVM/x86: Add IBPB support (Ashok Raj)  [Orabug: 28069548] \n- KVM: x86: pass host_initiated to functions that read MSRs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: make MSR bitmaps per-VCPU (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: introduce alloc_loaded_vmcs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: nVMX: Eliminate vmcs02 pool (Jim Mattson)  [Orabug: 28069548] \n- KVM: nVMX: fix msr bitmaps to prevent L2 from accessing L0 x2APIC (Radim Krcmar)  [Orabug: 28069548] \n- ocfs2: dont clear bh uptodate for block read (Junxiao Bi)  [Orabug: 28762940] \n- ocfs2: clear journal dirty flag after shutdown journal (Junxiao Bi)  [Orabug: 28924775] \n- ocfs2: fix panic due to unrecovered local alloc (Junxiao Bi)  [Orabug: 28924775] \n- net: rds: fix rds_ib_sysctl_max_recv_allocation error (Zhu Yanjun)  [Orabug: 28947481] \n- x86/speculation: Always disable IBRS in disable_ibrs_and_friends() (Alejandro Jimenez)  [Orabug: 29139710]",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2018-1094.html",
+								"http://linux.oracle.com/errata/ELSA-2019-4510.html",
 							},
+							Title:    "ELSA-2019-4510: Unbreakable Enterprise kernel security update (IMPORTANT)",
+							Severity: types.SeverityHigh,
 						},
 					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2018-1094", "Oracle Linux 6", "kernel-uek-firmware"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el6uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el6uek",
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2018-19824",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[4.1.12-124.24.3]\n- ext4: update i_disksize when new eof exceeds it (Shan Hai)  [Orabug: 28940828] \n- ext4: update i_disksize if direct write past ondisk size (Eryu Guan)  [Orabug: 28940828] \n- ext4: protect i_disksize update by i_data_sem in direct write path (Eryu Guan)  [Orabug: 28940828] \n- ALSA: usb-audio: Fix UAF decrement if card has no live interfaces in card.c (Hui Peng)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Replace probing flag with active refcount (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Avoid nested autoresume calls (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ext4: validate that metadata blocks do not overlap superblock (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: update inline int ext4_has_metadata_csum(struct super_block *sb) (John Donnelly)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: always initialize the crc32c checksum driver (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094} {CVE-2018-1094}\n- Revert 'bnxt_en: Reduce default rings on multi-port cards.' (Brian Maly)  [Orabug: 28687746] \n- mlx4_core: Disable P_Key Violation Traps (Hakon Bugge)  [Orabug: 27693633] \n- rds: RDS connection does not reconnect after CQ access violation error (Venkat Venkatsubra)  [Orabug: 28733324]\n\n[4.1.12-124.24.2]\n- KVM/SVM: Allow direct access to MSR_IA32_SPEC_CTRL (KarimAllah Ahmed)  [Orabug: 28069548] \n- KVM/VMX: Allow direct access to MSR_IA32_SPEC_CTRL - reloaded (Mihai Carabas)  [Orabug: 28069548] \n- KVM/x86: Add IBPB support (Ashok Raj)  [Orabug: 28069548] \n- KVM: x86: pass host_initiated to functions that read MSRs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: make MSR bitmaps per-VCPU (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: introduce alloc_loaded_vmcs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: nVMX: Eliminate vmcs02 pool (Jim Mattson)  [Orabug: 28069548] \n- KVM: nVMX: fix msr bitmaps to prevent L2 from accessing L0 x2APIC (Radim Krcmar)  [Orabug: 28069548] \n- ocfs2: dont clear bh uptodate for block read (Junxiao Bi)  [Orabug: 28762940] \n- ocfs2: clear journal dirty flag after shutdown journal (Junxiao Bi)  [Orabug: 28924775] \n- ocfs2: fix panic due to unrecovered local alloc (Junxiao Bi)  [Orabug: 28924775] \n- net: rds: fix rds_ib_sysctl_max_recv_allocation error (Zhu Yanjun)  [Orabug: 28947481] \n- x86/speculation: Always disable IBRS in disable_ibrs_and_friends() (Alejandro Jimenez)  [Orabug: 29139710]",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2018-19824.html",
+								"http://linux.oracle.com/errata/ELSA-2019-4510.html",
 							},
+							Title:    "ELSA-2019-4510: Unbreakable Enterprise kernel security update (IMPORTANT)",
+							Severity: types.SeverityHigh,
 						},
 					},
 				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key: []string{"advisory-detail", "CVE-2018-19824", "Oracle Linux 6", "kernel-uek-firmware"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el6uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el6uek",
-							},
-						},
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2018-1094",
+						Severity:        types.SeverityUnknown,
 					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2018-1094", "Oracle Linux 7", "kernel-uek-doc"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el7uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el7uek",
-							},
-						},
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2018-19824",
+						Severity:        types.SeverityUnknown,
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2018-19824", "Oracle Linux 7", "kernel-uek-doc"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el7uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el7uek",
-							},
-						},
-					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2018-1094", "Oracle Linux 7", "kernel-uek-firmware"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el7uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el7uek",
-							},
-						},
-					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2018-19824", "Oracle Linux 7", "kernel-uek-firmware"},
-					Value: types.Advisories{
-						FixedVersion: "4.1.12-124.24.3.el7uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "4.1.12-124.24.3.el7uek",
-							},
-						},
-					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "CVE-2018-1094", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2019-4510: Unbreakable Enterprise kernel security update (IMPORTANT)",
-						Description: "[4.1.12-124.24.3]\n- ext4: update i_disksize when new eof exceeds it (Shan Hai)  [Orabug: 28940828] \n- ext4: update i_disksize if direct write past ondisk size (Eryu Guan)  [Orabug: 28940828] \n- ext4: protect i_disksize update by i_data_sem in direct write path (Eryu Guan)  [Orabug: 28940828] \n- ALSA: usb-audio: Fix UAF decrement if card has no live interfaces in card.c (Hui Peng)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Replace probing flag with active refcount (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Avoid nested autoresume calls (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ext4: validate that metadata blocks do not overlap superblock (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: update inline int ext4_has_metadata_csum(struct super_block *sb) (John Donnelly)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: always initialize the crc32c checksum driver (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094} {CVE-2018-1094}\n- Revert 'bnxt_en: Reduce default rings on multi-port cards.' (Brian Maly)  [Orabug: 28687746] \n- mlx4_core: Disable P_Key Violation Traps (Hakon Bugge)  [Orabug: 27693633] \n- rds: RDS connection does not reconnect after CQ access violation error (Venkat Venkatsubra)  [Orabug: 28733324]\n\n[4.1.12-124.24.2]\n- KVM/SVM: Allow direct access to MSR_IA32_SPEC_CTRL (KarimAllah Ahmed)  [Orabug: 28069548] \n- KVM/VMX: Allow direct access to MSR_IA32_SPEC_CTRL - reloaded (Mihai Carabas)  [Orabug: 28069548] \n- KVM/x86: Add IBPB support (Ashok Raj)  [Orabug: 28069548] \n- KVM: x86: pass host_initiated to functions that read MSRs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: make MSR bitmaps per-VCPU (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: introduce alloc_loaded_vmcs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: nVMX: Eliminate vmcs02 pool (Jim Mattson)  [Orabug: 28069548] \n- KVM: nVMX: fix msr bitmaps to prevent L2 from accessing L0 x2APIC (Radim Krcmar)  [Orabug: 28069548] \n- ocfs2: dont clear bh uptodate for block read (Junxiao Bi)  [Orabug: 28762940] \n- ocfs2: clear journal dirty flag after shutdown journal (Junxiao Bi)  [Orabug: 28924775] \n- ocfs2: fix panic due to unrecovered local alloc (Junxiao Bi)  [Orabug: 28924775] \n- net: rds: fix rds_ib_sysctl_max_recv_allocation error (Zhu Yanjun)  [Orabug: 28947481] \n- x86/speculation: Always disable IBRS in disable_ibrs_and_friends() (Alejandro Jimenez)  [Orabug: 29139710]",
-						References: []string{
-							"https://linux.oracle.com/cve/CVE-2018-1094.html",
-							"https://linux.oracle.com/errata/ELSA-2019-4510.html",
-						},
-						Severity: types.SeverityHigh,
-					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "CVE-2018-19824", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2019-4510: Unbreakable Enterprise kernel security update (IMPORTANT)",
-						Description: "[4.1.12-124.24.3]\n- ext4: update i_disksize when new eof exceeds it (Shan Hai)  [Orabug: 28940828] \n- ext4: update i_disksize if direct write past ondisk size (Eryu Guan)  [Orabug: 28940828] \n- ext4: protect i_disksize update by i_data_sem in direct write path (Eryu Guan)  [Orabug: 28940828] \n- ALSA: usb-audio: Fix UAF decrement if card has no live interfaces in card.c (Hui Peng)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Replace probing flag with active refcount (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ALSA: usb-audio: Avoid nested autoresume calls (Takashi Iwai)  [Orabug: 29042981]  {CVE-2018-19824}\n- ext4: validate that metadata blocks do not overlap superblock (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: update inline int ext4_has_metadata_csum(struct super_block *sb) (John Donnelly)  [Orabug: 29114440]  {CVE-2018-1094}\n- ext4: always initialize the crc32c checksum driver (Theodore Ts'o)  [Orabug: 29114440]  {CVE-2018-1094} {CVE-2018-1094}\n- Revert 'bnxt_en: Reduce default rings on multi-port cards.' (Brian Maly)  [Orabug: 28687746] \n- mlx4_core: Disable P_Key Violation Traps (Hakon Bugge)  [Orabug: 27693633] \n- rds: RDS connection does not reconnect after CQ access violation error (Venkat Venkatsubra)  [Orabug: 28733324]\n\n[4.1.12-124.24.2]\n- KVM/SVM: Allow direct access to MSR_IA32_SPEC_CTRL (KarimAllah Ahmed)  [Orabug: 28069548] \n- KVM/VMX: Allow direct access to MSR_IA32_SPEC_CTRL - reloaded (Mihai Carabas)  [Orabug: 28069548] \n- KVM/x86: Add IBPB support (Ashok Raj)  [Orabug: 28069548] \n- KVM: x86: pass host_initiated to functions that read MSRs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: make MSR bitmaps per-VCPU (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: VMX: introduce alloc_loaded_vmcs (Paolo Bonzini)  [Orabug: 28069548] \n- KVM: nVMX: Eliminate vmcs02 pool (Jim Mattson)  [Orabug: 28069548] \n- KVM: nVMX: fix msr bitmaps to prevent L2 from accessing L0 x2APIC (Radim Krcmar)  [Orabug: 28069548] \n- ocfs2: dont clear bh uptodate for block read (Junxiao Bi)  [Orabug: 28762940] \n- ocfs2: clear journal dirty flag after shutdown journal (Junxiao Bi)  [Orabug: 28924775] \n- ocfs2: fix panic due to unrecovered local alloc (Junxiao Bi)  [Orabug: 28924775] \n- net: rds: fix rds_ib_sysctl_max_recv_allocation error (Zhu Yanjun)  [Orabug: 28947481] \n- x86/speculation: Always disable IBRS in disable_ibrs_and_friends() (Alejandro Jimenez)  [Orabug: 29139710]",
-						References: []string{
-							"https://linux.oracle.com/cve/CVE-2018-19824.html",
-							"https://linux.oracle.com/errata/ELSA-2019-4510.html",
-						},
-						Severity: types.SeverityHigh,
-					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2018-1094"},
-					Value: map[string]interface{}{},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2018-19824"},
-					Value: map[string]interface{}{},
 				},
 			},
 		},
 		{
-			name: "happy path multi flavors",
-			dir:  filepath.Join("testdata", "multi-flavor"),
-			wantValues: []vulnsrctest.WantValues{
+			name: "happy path multi package",
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 8"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+					Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
+					},
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
+							{
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-devel is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: "bind-devel is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-sdb is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: "bind-sdb is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
+							},
+						},
+					},
+					Severity: "MODERATE",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
 					},
 				},
-
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
 				{
-					Key: []string{"advisory-detail", "CVE-2021-20232", "Oracle Linux 8", "gnutls"},
-					Value: types.Advisories{
-						FixedVersion: "3.6.16-4.el8",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "10:3.6.16-4.0.1.el8_fips",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0493",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0494",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-sdb",
+						VulnerabilityID: "CVE-2007-0493",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-sdb",
+						VulnerabilityID: "CVE-2007-0494",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "30:9.3.3-8.el5"},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0493.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
 							},
-							{
-								FixedVersion: "3.6.16-4.el8",
-							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
 					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2021-20232", "Oracle Linux 8", "nettle"},
-					Value: types.Advisories{
-						FixedVersion: "3.4.1-7.el8",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "3.4.1-7.el8",
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[30:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0494.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
 							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
 					},
 				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key: []string{"vulnerability-detail", "CVE-2021-20232", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2022-9221:  gnutls security update (MODERATE)",
-						Description: "[3.6.16-4.0.1_fips]\n- Allow RSA keygen with modulus sizes bigger than 3072 bits and validate the seed length\n  as defined in FIPS 186-4 section B.3.2 [Orabug: 33200526]\n- Allow bigger known RSA modulus sizes when calling\n  rsa_generate_fips186_4_keypair directly [Orabug: 33200526]\n- Change Epoch from 1 to 10\n\n[3.6.16-4]\n- p11tool: Document ID reuse behavior when importing certs (#1776250)\n\n[3.6.16-3]\n- Treat SHA-1 signed CA in the trusted set differently (#1965445)\n\n[3.6.16-2]\n- Filter certificate_types in TLS 1.2 CR based on signature algorithms (#1942216)\n\n[3.6.16-1]\n- Update to upstream 3.6.16 release (#1956783)\n- Fix potential use-after-free in key_share handling (#1927597)\n- Fix potential use-after-free in pre_shared_key handling (#1927593)\n- Stop gnutls-serv relying on AI_ADDRCONFIG to decide listening address (#1908334)\n- Fix cert expiration issue in tests (#1908110)\n\n[3.6.14-10]\n- Port fixes for potential miscalculation in ecdsa_verify (#1942931)\n\n[3.6.14-9]\n- Revert the previous change",
-						References: []string{
-							"https://linux.oracle.com/cve/CVE-2021-20232.html",
-							"https://linux.oracle.com/errata/ELSA-2022-9221.html",
-						},
-						Severity: types.SeverityMedium,
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Severity:        types.SeverityUnknown,
 					},
 				},
 				{
-					Key:   []string{"vulnerability-id", "CVE-2021-20232"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
 		{
-			name: "happy path multiple ELSAs",
-			dir:  filepath.Join("testdata", "multi-elsas"),
-			wantValues: []vulnsrctest.WantValues{
+			name: "happy path epoch 0",
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 8"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+					Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
 					},
-				},
-
-				{
-					Key: []string{"advisory-detail", "CVE-2021-23133", "Oracle Linux 7", "kernel-uek"},
-					Value: types.Advisories{
-						FixedVersion: "5.4.17-2102.203.5.el7uek",
-						Entries: []types.Advisory{
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "5.4.17-2102.203.5.el7uek",
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-devel is earlier than 0:9.3.3-8.el5",
+											},
+											{
+												Comment: "bind-devel is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
 							},
 						},
 					},
+					Severity: "MODERATE",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-2007-0494.html",
+							ID:     "CVE-2007-0494",
+						},
+					},
+				},
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0493",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "9.3.3-8.el5"},
+					},
 				},
 				{
-					Key: []string{"advisory-detail", "CVE-2021-23133", "Oracle Linux 8", "kernel-uek"},
-					Value: types.Advisories{
-						FixedVersion: "5.4.17-2102.203.5.el8uek",
-						Entries: []types.Advisory{
-							{
-								FixedVersion: "5.4.17-2102.203.5.el8uek",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "CVE-2007-0494",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "9.3.3-8.el5"},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0493.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
 							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
 					},
 				},
 				{
-					Key: []string{"vulnerability-detail", "CVE-2021-23133", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2021-9362: Unbreakable Enterprise kernel security update (IMPORTANT)",
-						Description: "[5.4.17-2102.203.5]\n- rds/ib: move rds_ib_clear_irq_miss() to .h ...",
-						References: []string{
-							"https://linux.oracle.com/cve/CVE-2021-23133.html",
-							"https://linux.oracle.com/errata/ELSA-2021-9362.html",
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-2007-0494.html",
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
 						},
-						Severity: types.SeverityHigh,
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0493",
+						Severity:        types.SeverityUnknown,
 					},
 				},
 				{
-					Key:   []string{"vulnerability-id", "CVE-2021-23133"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2007-0494",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
 		{
-			name: "multiple ksplice builds",
-			dir:  filepath.Join("testdata", "ksplice"),
-			wantValues: []vulnsrctest.WantValues{
+			name: "happy path nonCves",
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 8"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+					Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							ID:     "ELSA-2007-0057",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-2007-0493.html",
+							ID:     "CVE-2007-0493",
+						},
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2016-10228", "Oracle Linux 8", "glibc"},
-					Value: types.Advisories{
-						FixedVersion: "2:2.28-151.0.1.ksplice2.el8",
-						Entries: []types.Advisory{
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "2:2.28-151.0.1.ksplice2.el8",
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "bind-devel is earlier than 0:9.3.3-8.el5",
+											},
+											Criterion{
+												Comment: "bind-devel is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
 							},
 						},
 					},
+					Severity: "MODERATE",
 				},
+			},
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
 				{
-					Key: []string{"vulnerability-detail", "CVE-2016-10228", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title: "ELSA-2021-9344:  glibc security update (IMPORTANT)",
-						References: []string{
-							"https://linux.oracle.com/cve/CVE-2016-10228.html",
-							"https://linux.oracle.com/errata/ELSA-2021-9344.html",
-						},
-						Severity: types.SeverityHigh,
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "Oracle Linux 5",
+						PkgName:         "bind-devel",
+						VulnerabilityID: "ELSA-2007-0057",
+						Advisory:        types.Advisory{VulnerabilityID: "", FixedVersion: "9.3.3-8.el5"},
 					},
 				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key:   []string{"vulnerability-id", "CVE-2016-10228"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "ELSA-2007-0057",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
+							References: []string{
+								"http://linux.oracle.com/errata/ELSA-2007-0057.html",
+							},
+							Title:    "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
+							Severity: types.SeverityMedium,
+						},
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "ELSA-2007-0057",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
 		{
-			name: "happy path ELSA-ID",
-			dir:  filepath.Join("testdata", "elsa-id"),
-			wantValues: []vulnsrctest.WantValues{
+			name: "empty package name",
+			cves: []OracleOVAL{
 				{
-					Key: []string{"data-source", "Oracle Linux 5"},
-					Value: types.DataSource{
-						ID:   vulnerability.OracleOVAL,
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
+					Title:       "ELSA-0001-0001:  Moderate: empty security update  (N/A)",
+					Description: "empty description",
+					Platform:    []string{"Oracle Linux 5"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-0001-0001.html",
+							ID:     "ELSA-0001-0001",
+						},
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-0001-0001.html",
+							ID:     "CVE-0001-0001",
+						},
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "ELSA-2007-0057", "Oracle Linux 5", "bind-devel"},
-					Value: types.Advisories{
-						FixedVersion: "9.3.3-8.el5",
-						Entries: []types.Advisory{
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
 							{
-								FixedVersion: "9.3.3-8.el5",
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: " is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: " is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 5 is installed",
 							},
 						},
 					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "ELSA-2007-0057", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-2007-0057:  Moderate: bind security update  (MODERATE)",
-						Description: "[0:9.3.3-8]\n - added fix for #224445 - CVE-2007-0493 BIND might crash after\n   attempting to read free()-ed memory\n - added fix for #225229 - CVE-2007-0494 BIND dnssec denial of service\n - Resolves: rhbz#224445\n - Resolves: rhbz#225229",
-						References: []string{
-							"http://linux.oracle.com/errata/ELSA-2007-0057.html",
+					Severity: "N/A",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-0001-0001.html",
+							ID:     "CVE-0001-0001",
 						},
-						Severity: types.SeverityMedium,
 					},
 				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key:   []string{"vulnerability-id", "ELSA-2007-0057"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-0001-0001",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "empty description",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-0001-0001.html",
+								"http://linux.oracle.com/errata/ELSA-0001-0001.html",
+							},
+							Title:    "ELSA-0001-0001:  Moderate: empty security update  (N/A)",
+							Severity: types.SeverityUnknown,
+						},
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-0001-0001",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
 		{
 			name: "unknown platform",
-			dir:  filepath.Join("testdata", "unknown-platform"),
-			wantValues: []vulnsrctest.WantValues{
+			cves: []OracleOVAL{
 				{
-					Key: []string{"vulnerability-detail", "CVE-0001-0001", "oracle-oval"},
-					Value: types.VulnerabilityDetail{
-						Title:       "ELSA-0001-0001:  Moderate: empty security update  (N/A)",
-						Description: "empty description",
-						References: []string{
-							"http://linux.oracle.com/cve/CVE-0001-0001.html",
-							"http://linux.oracle.com/errata/ELSA-0001-0001.html",
+					Title:       "ELSA-0001-0001:  Moderate: unknown security update  (N/A)",
+					Description: "unknown description",
+					Platform:    []string{"Oracle Linux 1"},
+					References: []Reference{
+						{
+							Source: "elsa",
+							URI:    "http://linux.oracle.com/errata/ELSA-0001-0001.html",
+							ID:     "ELSA-0001-0001",
 						},
-						Severity: types.SeverityUnknown,
+						{
+							Source: "CVE",
+							URI:    "http://linux.oracle.com/cve/CVE-0001-0001.html",
+							ID:     "CVE-0001-0001",
+						},
+					},
+					Criteria: Criteria{
+						Operator: "AND",
+						Criterias: []Criteria{
+							{
+								Operator: "OR",
+								Criterias: []Criteria{
+									{
+										Operator:  "AND",
+										Criterias: nil,
+										Criterions: []Criterion{
+											{
+												Comment: "test is earlier than 30:9.3.3-8.el5",
+											},
+											{
+												Comment: "test is signed with the Oracle Linux 5 key",
+											},
+										},
+									},
+								},
+								Criterions: nil,
+							},
+						},
+						Criterions: []Criterion{
+							{
+								Comment: "Oracle Linux 1 is installed",
+							},
+						},
+					},
+					Severity: "N/A",
+					Cves: []Cve{
+						{
+							Impact: "",
+							Href:   "http://linux.oracle.com/cve/CVE-0001-0001.html",
+							ID:     "CVE-0001-0001",
+						},
 					},
 				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key:   []string{"vulnerability-id", "CVE-0001-0001"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-0001-0001",
+						Source:          vulnerability.OracleOVAL,
+						Vulnerability: types.VulnerabilityDetail{
+							Description: "unknown description",
+							References: []string{
+								"http://linux.oracle.com/cve/CVE-0001-0001.html",
+								"http://linux.oracle.com/errata/ELSA-0001-0001.html",
+							},
+							Title:    "ELSA-0001-0001:  Moderate: unknown security update  (N/A)",
+							Severity: types.SeverityUnknown,
+						},
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-0001-0001",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
-		{
-			name:    "sad path (dir doesn't exist)",
-			dir:     filepath.Join("testdata", "badPath"),
-			wantErr: "no such file or directory",
-		},
-		{
-			name:    "sad path (failed to decode)",
-			dir:     filepath.Join("testdata", "sad"),
-			wantErr: "failed to decode Oracle Linux OVAL JSON",
-		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			vs := NewVulnSrc()
-			vulnsrctest.TestUpdate(t, vs, vulnsrctest.TestUpdateArgs{
-				Dir:        tt.dir,
-				WantValues: tt.wantValues,
-				WantErr:    tt.wantErr,
-			})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := &bolt.Tx{}
+			mockDBConfig := new(db.MockOperation)
+			mockDBConfig.ApplyPutAdvisoryDetailExpectations(tc.putAdvisoryDetail)
+			mockDBConfig.ApplyPutVulnerabilityDetailExpectations(tc.putVulnerabilityDetail)
+			mockDBConfig.ApplyPutSeverityExpectations(tc.putSeverity)
+
+			ac := VulnSrc{dbc: mockDBConfig}
+			err := ac.commit(tx, tc.cves)
+
+			switch {
+			case tc.expectedErrorMsg != "":
+				assert.Contains(t, err.Error(), tc.expectedErrorMsg, tc.name)
+			default:
+				assert.NoError(t, err, tc.name)
+			}
+			mockDBConfig.AssertExpectations(t)
 		})
 	}
 }
 
+func TestSeverityFromThreat(t *testing.T) {
+	testCases := map[string]types.Severity{
+		"LOW":       types.SeverityLow,
+		"MODERATE":  types.SeverityMedium,
+		"IMPORTANT": types.SeverityHigh,
+		"CRITICAL":  types.SeverityCritical,
+		"N/A":       types.SeverityUnknown,
+	}
+	for k, v := range testCases {
+		assert.Equal(t, v, severityFromThreat(k))
+	}
+}
+
 func TestVulnSrc_Get(t *testing.T) {
-	tests := []struct {
-		name     string
-		fixtures []string
-		version  string
-		pkgName  string
-		want     []types.Advisory
-		wantErr  string
+	testCases := []struct {
+		name          string
+		version       string
+		pkgName       string
+		getAdvisories db.OperationGetAdvisoriesExpectation
+		expectedError error
+		expectedVulns []types.Advisory
 	}{
 		{
-			name:     "happy path",
-			fixtures: []string{"testdata/fixtures/happy.yaml", "testdata/fixtures/data-source.yaml"},
-			version:  "8",
-			pkgName:  "bind",
-			want: []types.Advisory{
-				{
-					VulnerabilityID: "ELSA-2019-1145",
-					FixedVersion:    "32:9.11.4-17.P2.el8_0",
-					DataSource: &types.DataSource{
-						ID:   "oracle-oval",
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
-					},
+			name:    "happy path",
+			version: "8",
+			pkgName: "bind",
+			getAdvisories: db.OperationGetAdvisoriesExpectation{
+				Args: db.OperationGetAdvisoriesArgs{
+					Source:  "Oracle Linux 8",
+					PkgName: "bind",
 				},
+				Returns: db.OperationGetAdvisoriesReturns{
+					Advisories: []types.Advisory{
+						{VulnerabilityID: "ELSA-2019-1145", FixedVersion: "32:9.11.4-17.P2.el8_0"},
+					},
+					Err: nil,
+				},
+			},
+			expectedError: nil,
+			expectedVulns: []types.Advisory{{VulnerabilityID: "ELSA-2019-1145", FixedVersion: "32:9.11.4-17.P2.el8_0"}},
+		},
+		{
+			name:    "no advisories are returned",
+			version: "8",
+			pkgName: "no-package",
+			getAdvisories: db.OperationGetAdvisoriesExpectation{
+				Args: db.OperationGetAdvisoriesArgs{
+					Source:  "Oracle Linux 8",
+					PkgName: "no-package",
+				},
+				Returns: db.OperationGetAdvisoriesReturns{},
 			},
 		},
 		{
-			name:     "happy path. Multiple versions for one CVE",
-			fixtures: []string{"testdata/fixtures/multiple-versions.yaml", "testdata/fixtures/data-source.yaml"},
-			version:  "8",
-			pkgName:  "gnutls",
-			want: []types.Advisory{
-				{
-					VulnerabilityID: "CVE-2021-20232",
-					FixedVersion:    "10:3.6.16-4.0.1.el8_fips",
-					DataSource: &types.DataSource{
-						ID:   "oracle-oval",
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
-					},
+			name: "oracle GetAdvisories return an error",
+			getAdvisories: db.OperationGetAdvisoriesExpectation{
+				Args: db.OperationGetAdvisoriesArgs{
+					SourceAnything:  true,
+					PkgNameAnything: true,
 				},
-				{
-					VulnerabilityID: "CVE-2021-20232",
-					FixedVersion:    "3.6.16-4.el8",
-					DataSource: &types.DataSource{
-						ID:   "oracle-oval",
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
-					},
+				Returns: db.OperationGetAdvisoriesReturns{
+					Advisories: []types.Advisory{},
+					Err:        xerrors.New("unable to get advisories"),
 				},
 			},
-		},
-		{
-			name:     "happy path. Old tunnel-db",
-			fixtures: []string{"testdata/fixtures/old.yaml", "testdata/fixtures/data-source.yaml"},
-			version:  "8",
-			pkgName:  "bind",
-			want: []types.Advisory{
-				{
-					VulnerabilityID: "ELSA-2019-1145",
-					FixedVersion:    "32:9.11.4-17.P2.el8_0",
-					DataSource: &types.DataSource{
-						ID:   "oracle-oval",
-						Name: "Oracle Linux OVAL definitions",
-						URL:  "https://linux.oracle.com/security/oval/",
-					},
-				},
-			},
-		},
-		{
-			name:     "no advisories are returned",
-			fixtures: []string{"testdata/fixtures/happy.yaml"},
-			version:  "8",
-			pkgName:  "no-package",
-			want:     nil,
-		},
-		{
-			name:     "GetAdvisories returns an error",
-			fixtures: []string{"testdata/fixtures/sad.yaml"},
-			version:  "8",
-			pkgName:  "bind",
-			wantErr:  "failed to unmarshal advisory JSON",
+			expectedError: errors.New("failed to get Oracle Linux advisories: unable to get advisories"),
+			expectedVulns: nil,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			vs := NewVulnSrc()
-			vulnsrctest.TestGet(t, vs, vulnsrctest.TestGetArgs{
-				Fixtures:   tt.fixtures,
-				WantValues: tt.want,
-				Release:    tt.version,
-				PkgName:    tt.pkgName,
-				WantErr:    tt.wantErr,
-			})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDBConfig := new(db.MockOperation)
+			mockDBConfig.ApplyGetAdvisoriesExpectation(tc.getAdvisories)
+
+			ac := VulnSrc{dbc: mockDBConfig}
+			vuls, err := ac.Get(tc.version, tc.pkgName)
+
+			switch {
+			case tc.expectedError != nil:
+				assert.EqualError(t, err, tc.expectedError.Error(), tc.name)
+			default:
+				assert.NoError(t, err, tc.name)
+			}
+			assert.Equal(t, tc.expectedVulns, vuls, tc.name)
+
+			mockDBConfig.AssertExpectations(t)
 		})
 	}
 }

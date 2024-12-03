@@ -6,15 +6,15 @@ import (
 	"io"
 	"log"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -23,13 +23,7 @@ const (
 )
 
 var (
-	targetVersions = []string{"1", "2", "2022", "2023"}
-
-	source = types.DataSource{
-		ID:   vulnerability.Amazon,
-		Name: "Amazon Linux Security Center",
-		URL:  "https://alas.aws.amazon.com/",
-	}
+	targetVersions = []string{"1", "2"}
 )
 
 type VulnSrc struct {
@@ -69,8 +63,8 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.Amazon
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -94,7 +88,7 @@ func (vs *VulnSrc) walkFunc(r io.Reader, path string) error {
 		return nil
 	}
 	version := paths[len(paths)-2]
-	if !slices.Contains(targetVersions, version) {
+	if !utils.StringInSlice(version, targetVersions) {
 		log.Printf("unsupported Amazon version: %s\n", version)
 		return nil
 	}
@@ -121,17 +115,14 @@ func (vs VulnSrc) save() error {
 
 func (vs VulnSrc) commit(tx *bolt.Tx) error {
 	for majorVersion, alasList := range vs.advisories {
-		platformName := fmt.Sprintf(platformFormat, majorVersion)
-		if err := vs.dbc.PutDataSource(tx, platformName, source); err != nil {
-			return xerrors.Errorf("failed to put data source: %w", err)
-		}
 		for _, alas := range alasList {
 			for _, cveID := range alas.CveIDs {
 				for _, pkg := range alas.Packages {
+					platformName := fmt.Sprintf(platformFormat, majorVersion)
 					advisory := types.Advisory{
-						FixedVersion: utils.ConstructVersion(pkg.Epoch, pkg.Version, pkg.Release),
+						FixedVersion: constructVersion(pkg.Epoch, pkg.Version, pkg.Release),
 					}
-					if err := vs.dbc.PutAdvisoryDetail(tx, cveID, pkg.Name, []string{platformName}, advisory); err != nil {
+					if err := vs.dbc.PutAdvisoryDetail(tx, cveID, platformName, pkg.Name, advisory); err != nil {
 						return xerrors.Errorf("failed to save Amazon advisory: %w", err)
 					}
 
@@ -146,13 +137,13 @@ func (vs VulnSrc) commit(tx *bolt.Tx) error {
 						Description: alas.Description,
 						Title:       "",
 					}
-					if err := vs.dbc.PutVulnerabilityDetail(tx, cveID, source.ID, vuln); err != nil {
+					if err := vs.dbc.PutVulnerabilityDetail(tx, cveID, vulnerability.Amazon, vuln); err != nil {
 						return xerrors.Errorf("failed to save Amazon vulnerability detail: %w", err)
 					}
 
-					// for optimization
-					if err := vs.dbc.PutVulnerabilityID(tx, cveID); err != nil {
-						return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+					// for light DB
+					if err := vs.dbc.PutSeverity(tx, cveID, types.SeverityUnknown); err != nil {
+						return xerrors.Errorf("failed to save Amazon vulnerability severity: %w", err)
 					}
 				}
 			}
@@ -172,7 +163,7 @@ func (vs VulnSrc) Get(version string, pkgName string) ([]types.Advisory, error) 
 }
 
 func severityFromPriority(priority string) types.Severity {
-	switch strings.ToLower(priority) {
+	switch priority {
 	case "low":
 		return types.SeverityLow
 	case "medium":
@@ -184,4 +175,18 @@ func severityFromPriority(priority string) types.Severity {
 	default:
 		return types.SeverityUnknown
 	}
+}
+
+func constructVersion(epoch, version, release string) string {
+	verStr := ""
+	if epoch != "0" && epoch != "" {
+		verStr += fmt.Sprintf("%s:", epoch)
+	}
+	verStr += version
+
+	if release != "" {
+		verStr += fmt.Sprintf("-%s", release)
+
+	}
+	return verStr
 }

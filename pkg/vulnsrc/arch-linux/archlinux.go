@@ -7,24 +7,17 @@ import (
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
 
 const (
 	archLinuxDir = "arch-linux"
 	platformName = "archlinux"
-)
-
-var (
-	source = types.DataSource{
-		ID:   vulnerability.ArchLinux,
-		Name: "Arch Linux Vulnerable issues",
-		URL:  "https://security.archlinux.org/",
-	}
 )
 
 type VulnSrc struct {
@@ -37,8 +30,8 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.ArchLinux
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -67,13 +60,7 @@ func (vs VulnSrc) Update(dir string) error {
 
 func (vs VulnSrc) save(avgs []ArchVulnGroup) error {
 	err := vs.dbc.BatchUpdate(func(tx *bolt.Tx) error {
-		if err := vs.dbc.PutDataSource(tx, platformName, source); err != nil {
-			return xerrors.Errorf("failed to put data source: %w", err)
-		}
-		if err := vs.commit(tx, avgs); err != nil {
-			return xerrors.Errorf("commit error: %w", err)
-		}
-		return nil
+		return vs.commit(tx, avgs)
 	})
 	if err != nil {
 		return xerrors.Errorf("error in batch update: %w", err)
@@ -90,20 +77,20 @@ func (vs VulnSrc) commit(tx *bolt.Tx, avgs []ArchVulnGroup) error {
 			}
 
 			for _, pkg := range avg.Packages {
-				if err := vs.dbc.PutAdvisoryDetail(tx, cveId, pkg, []string{platformName}, advisory); err != nil {
+				if err := vs.dbc.PutAdvisoryDetail(tx, cveId, platformName, pkg, advisory); err != nil {
 					return xerrors.Errorf("failed to save arch linux advisory: %w", err)
 				}
 
 				vuln := types.VulnerabilityDetail{
 					Severity: convertSeverity(avg.Severity),
 				}
-				if err := vs.dbc.PutVulnerabilityDetail(tx, cveId, source.ID, vuln); err != nil {
+				if err := vs.dbc.PutVulnerabilityDetail(tx, cveId, vulnerability.ArchLinux, vuln); err != nil {
 					return xerrors.Errorf("failed to save arch linux vulnerability: %w", err)
 				}
 
-				// for optimization
-				if err := vs.dbc.PutVulnerabilityID(tx, cveId); err != nil {
-					return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+				// for light DB
+				if err := vs.dbc.PutSeverity(tx, cveId, types.SeverityUnknown); err != nil {
+					return xerrors.Errorf("failed to save arch linux vulnerability severity for light: %w", err)
 				}
 			}
 

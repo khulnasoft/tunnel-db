@@ -7,14 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	bolt "go.etcd.io/bbolt"
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/bucket"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
+	bolt "go.etcd.io/bbolt"
 	"golang.org/x/xerrors"
 )
 
@@ -22,27 +20,21 @@ const (
 	// GitLab Advisory Database
 	gladDir = "glad"
 
-	// cf. https://gitlab.com/gitlab-org/security-products/gemnasium-db/-/tree/e4176fff52c027165ae5a79f5b1193090e2fbef0#package-slug-and-package-name
-	Conan packageType = "conan"
+	Conan     packageType = "Conan"
+	Gem       packageType = "Gem"
+	Go        packageType = "Go"
+	Maven     packageType = "Maven"
+	Npm       packageType = "Npm"
+	Nuget     packageType = "Nuget"
+	Packagist packageType = "Packagist"
+	PyPI      packageType = "PyPI"
 )
 
 var (
-	supportedIDPrefixes = []string{
-		"CVE",
-		"GHSA",
-		"GMS",
-	}
-
-	// Mapping between GLAD slug and Tunnel ecosystem
-	ecosystems = map[packageType]types.Ecosystem{
-		Conan: vulnerability.Conan,
-	}
-
-	source = types.DataSource{
-		ID:   vulnerability.GLAD,
-		Name: "GitLab Advisory Database Community",
-		URL:  "https://gitlab.com/gitlab-org/advisories-community",
-	}
+	// TODO: support Conan, Npm, NuGet, PyPI and Packagist
+	supportedPkgTypes   = []packageType{Go, Maven}
+	supportedIDPrefixes = []string{"CVE", "GMS"}
+	datasource          = "GitLab Advisory Database"
 )
 
 type packageType string
@@ -57,14 +49,14 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.GLAD
 }
 
 func (vs VulnSrc) Update(dir string) error {
-	for t := range ecosystems {
-		log.Printf("    Updating GitLab Advisory Database %s...", cases.Title(language.English).String(string(t)))
-		rootDir := filepath.Join(dir, "vuln-list", gladDir, string(t))
+	for _, t := range supportedPkgTypes {
+		log.Printf("    Updating GitLab Advisory Database %s...", t)
+		rootDir := filepath.Join(dir, "vuln-list", gladDir, strings.ToLower(string(t)))
 		if err := vs.update(t, rootDir); err != nil {
 			return xerrors.Errorf("update error: %w", err)
 		}
@@ -99,6 +91,7 @@ func (vs VulnSrc) update(pkgType packageType, rootDir string) error {
 }
 
 func (vs VulnSrc) save(pkgType packageType, glads []Advisory) error {
+	log.Printf("    Saving GitLab Advisory Database %s...", pkgType)
 	err := vs.dbc.BatchUpdate(func(tx *bolt.Tx) error {
 		return vs.commit(tx, pkgType, glads)
 	})
@@ -122,16 +115,17 @@ func (vs VulnSrc) commit(tx *bolt.Tx, pkgType packageType, glads []Advisory) err
 		}
 
 		pkgName := ss[1]
-		ecosystem, ok := ecosystems[pkgType]
-		if !ok {
-			return xerrors.Errorf("failed to get ecosystem: %s", pkgType)
-		}
-		bucketName := bucket.Name(ecosystem, source.Name)
-		if err := vs.dbc.PutDataSource(tx, bucketName, source); err != nil {
-			return xerrors.Errorf("failed to put data source: %w", err)
+		if pkgType == Maven {
+			// e.g. "maven/batik/batik-transcoder" => "maven", "batik:batik-transcoder"
+			pkgName = strings.ReplaceAll(pkgName, "/", ":")
 		}
 
-		if err := vs.dbc.PutAdvisoryDetail(tx, glad.Identifier, pkgName, []string{bucketName}, a); err != nil {
+		bucketName, err := bucket.Name(string(pkgType), datasource)
+		if err != nil {
+			return xerrors.Errorf("failed to get bucket name with %s, %s: %w", pkgType, datasource, err)
+		}
+
+		if err = vs.dbc.PutAdvisoryDetail(tx, glad.Identifier, bucketName, pkgName, a); err != nil {
 			return xerrors.Errorf("failed to save GLAD advisory detail: %w", err)
 		}
 
@@ -144,13 +138,12 @@ func (vs VulnSrc) commit(tx *bolt.Tx, pkgType packageType, glads []Advisory) err
 			Description: glad.Description,
 		}
 
-		if err := vs.dbc.PutVulnerabilityDetail(tx, glad.Identifier, source.ID, vuln); err != nil {
+		if err = vs.dbc.PutVulnerabilityDetail(tx, glad.Identifier, vulnerability.GLAD, vuln); err != nil {
 			return xerrors.Errorf("failed to save GLAD vulnerability detail: %w", err)
 		}
 
-		// for optimization
-		if err := vs.dbc.PutVulnerabilityID(tx, glad.Identifier); err != nil {
-			return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+		if err = vs.dbc.PutSeverity(tx, glad.Identifier, types.SeverityUnknown); err != nil {
+			return xerrors.Errorf("failed to save GLAD vulnerability severity: %w", err)
 		}
 	}
 

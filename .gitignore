@@ -13,13 +13,9 @@ coverage.txt
 *.out
 
 .idea
-.vscode
 
-**/.DS_Store
-
-/assets
-/cache
-/out
+assets
+cache
 
 # tunnel-db Outputs
 tunnel-db

@@ -1,121 +1,104 @@
 package govulndb_test
 
 import (
-	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
+	"go.khulnasoft.com/tunnel-db/pkg/dbtest"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/govulndb"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrctest"
 )
 
 func TestVulnSrc_Update(t *testing.T) {
+	type wantKV struct {
+		key   []string
+		value interface{}
+	}
 	tests := []struct {
-		name       string
-		dir        string
-		wantValues []vulnsrctest.WantValues
-		noBuckets  [][]string
-		wantErr    string
+		name    string
+		dir     string
+		want    []wantKV
+		wantErr string
 	}{
 		{
 			name: "happy path",
-			dir:  filepath.Join("testdata", "happy"),
-			wantValues: []vulnsrctest.WantValues{
+			dir:  "testdata/happy",
+			want: []wantKV{
 				{
-					Key: []string{
-						"data-source",
-						"go::The Go Vulnerability Database",
-					},
-					Value: types.DataSource{
-						ID:   vulnerability.GoVulnDB,
-						Name: "The Go Vulnerability Database",
-						URL:  "https://pkg.go.dev/vuln/",
+					key: []string{"advisory-detail", "CVE-2019-0210", "go::vulndb", "github.com/apache/thrift"},
+					value: types.Advisory{
+						PatchedVersions:    []string{"0.13.0"},
+						VulnerableVersions: []string{">=0.0.0-20151001171628-53dd39833a08, <0.13.0"},
 					},
 				},
 				{
-					Key: []string{
-						"advisory-detail",
-						"CVE-2023-45288",
-						"go::The Go Vulnerability Database",
-						"stdlib",
-					},
-					Value: types.Advisory{
-						VendorIDs: []string{
-							"GHSA-4v7x-pqxf-cx7m",
-							"GO-2024-2687",
-						},
-						PatchedVersions: []string{
-							"1.21.9",
-							"1.22.2",
-						},
-						VulnerableVersions: []string{
-							"<1.21.9",
-							">=1.22.0-0, <1.22.2",
-						},
-					},
-				},
-				{
-					Key: []string{
-						"vulnerability-detail",
-						"CVE-2023-45288",
-						"govulndb",
-					},
-					Value: types.VulnerabilityDetail{
-						Title:       "HTTP/2 CONTINUATION flood in net/http",
-						Description: "An attacker may cause an HTTP/2 endpoint to read arbitrary amounts of header data by sending an excessive number of CONTINUATION frames.\n\nMaintaining HPACK state requires parsing and processing all HEADERS and CONTINUATION frames on a connection. When a request's headers exceed MaxHeaderBytes, no memory is allocated to store the excess headers, but they are still parsed.\n\nThis permits an attacker to cause an HTTP/2 endpoint to read arbitrary amounts of header data, all associated with a request which is going to be rejected. These headers can include Huffman-encoded data which is significantly more expensive for the receiver to decode than for an attacker to send.\n\nThe fix sets a limit on the amount of excess header frames we will process before closing a connection.",
+					key: []string{"vulnerability-detail", "CVE-2019-0210", "go::vulndb"},
+					value: types.VulnerabilityDetail{
+						Description: "Due to an improper bounds check, parsing maliciously crafted messages can cause panics. If\nthis package is used to parse untrusted input, this may be used as a vector for a denial of\nservice attack.\n",
 						References: []string{
-							"https://go.dev/issue/65051",
-							"https://go.dev/cl/576155",
-							"https://groups.google.com/g/golang-announce/c/YgW0sx8mN3M",
-							"https://pkg.go.dev/vuln/GO-2024-2687",
+							"https://go.googlesource.com/vulndb/+/refs/heads/master/reports/GO-2021-0101.yaml",
+							"https://github.com/apache/thrift/commit/264a3f318ed3e9e51573f67f963c8509786bcec2",
+							"https://github.com/advisories/GHSA-jq7p-26h5-w78r",
 						},
 					},
 				},
 				{
-					Key: []string{
-						"vulnerability-id",
-						"CVE-2023-45288",
+					key: []string{"advisory-detail", "CVE-2020-26160", "go::vulndb", "github.com/dgrijalva/jwt-go/v4"},
+					value: types.Advisory{
+						PatchedVersions:    []string{"4.0.0-preview1"},
+						VulnerableVersions: []string{">=0, <4.0.0-preview1"},
 					},
-					Value: map[string]interface{}{},
-				},
-			},
-			noBuckets: [][]string{
-				// We should save only stdlib packages
-				{
-					"advisory-detail",
-					"CVE-2021-41803",
 				},
 				{
-					"vulnerability-detail",
-					"CVE-2021-41803",
-				},
-				{
-					"vulnerability-id",
-					"CVE-2021-41803",
+					key: []string{"vulnerability-detail", "CVE-2020-26160", "go::vulndb"},
+					value: types.VulnerabilityDetail{
+						Description: "If a JWT contains an audience claim with an array of strings, rather\nthan a single string, and `MapClaims.VerifyAudience` is called with\n`req` set to `false`, then audience verification will be bypassed,\nallowing an invalid set of audiences to be provided.\n",
+						References: []string{
+							"https://go.googlesource.com/vulndb/+/refs/heads/master/reports/GO-2020-0017.yaml",
+							"https://github.com/dgrijalva/jwt-go/commit/ec0a89a131e3e8567adcb21254a5cd20a70ea4ab",
+							"https://github.com/dgrijalva/jwt-go/issues/422",
+						},
+					},
 				},
 			},
 		},
 		{
-			name:    "sad path (dir doesn't exist)",
-			dir:     filepath.Join("testdata", "badPath"),
-			wantErr: "no such file or directory",
-		},
-		{
-			name:    "sad path (failed to decode)",
-			dir:     filepath.Join("testdata", "sad"),
+			name:    "broken JSON",
+			dir:     "testdata/broken",
 			wantErr: "JSON decode error",
 		},
+		{
+			name:    "sad path",
+			dir:     "./sad",
+			wantErr: "no such file or directory",
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+
+			err := db.Init(tempDir)
+			require.NoError(t, err)
+			defer db.Close()
+
 			vs := govulndb.NewVulnSrc()
-			vulnsrctest.TestUpdate(t, vs, vulnsrctest.TestUpdateArgs{
-				Dir:        tt.dir,
-				WantValues: tt.wantValues,
-				WantErr:    tt.wantErr,
-				NoBuckets:  tt.noBuckets,
-			})
+			err = vs.Update(tt.dir)
+
+			if tt.wantErr != "" {
+				require.NotNil(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			require.NoError(t, db.Close()) // Need to close before dbtest.JSONEq is called
+			for _, want := range tt.want {
+				dbtest.JSONEq(t, db.Path(tempDir), want.key, want.value)
+			}
 		})
 	}
 }

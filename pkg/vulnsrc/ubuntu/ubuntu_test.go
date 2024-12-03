@@ -3,41 +3,39 @@ package ubuntu_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
+	"go.khulnasoft.com/tunnel-db/pkg/dbtest"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/ubuntu"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrctest"
 )
 
 func TestVulnSrc_Update(t *testing.T) {
+	type wantKV struct {
+		key   []string
+		value interface{}
+	}
 	tests := []struct {
 		name       string
-		dir        string
-		wantValues []vulnsrctest.WantValues
+		statuses   []string
+		wantValues []wantKV
 		noBuckets  [][]string
 		wantErr    string
 	}{
 		{
 			name: "happy path",
-			dir:  "testdata",
-			wantValues: []vulnsrctest.WantValues{
+			wantValues: []wantKV{
 				{
-					Key: []string{"data-source", "ubuntu 18.04"},
-					Value: types.DataSource{
-						ID:   vulnerability.Ubuntu,
-						Name: "Ubuntu CVE Tracker",
-						URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
-					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2020-1234", "ubuntu 18.04", "xen"},
-					Value: types.Advisory{
+					key: []string{"advisory-detail", "CVE-2020-1234", "ubuntu 18.04", "xen"},
+					value: types.Advisory{
 						FixedVersion: "1.2.3",
 					},
 				},
 				{
-					Key: []string{"vulnerability-detail", "CVE-2020-1234", "ubuntu"},
-					Value: types.VulnerabilityDetail{
+					key: []string{"vulnerability-detail", "CVE-2020-1234", "ubuntu"},
+					value: types.VulnerabilityDetail{
 						Description: "Observable response discrepancy in some Intel(R) Processors may allow an authorized user to potentially enable information disclosure via local access.",
 						Severity:    2,
 						References:  []string{"https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-0089"},
@@ -51,12 +49,29 @@ func TestVulnSrc_Update(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vs := ubuntu.NewVulnSrc()
-			vulnsrctest.TestUpdate(t, vs, vulnsrctest.TestUpdateArgs{
-				Dir:        tt.dir,
-				WantValues: tt.wantValues,
-				WantErr:    tt.wantErr,
-			})
+			cacheDir := dbtest.InitTestDB(t, nil)
+
+			src := ubuntu.NewVulnSrc()
+			err := src.Update("testdata")
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr, tt.name)
+				return
+			}
+
+			require.NoError(t, err, tt.name)
+
+			// Compare DB entries
+			require.NoError(t, err, db.Close())
+			dbPath := db.Path(cacheDir)
+			for _, want := range tt.wantValues {
+				dbtest.JSONEq(t, dbPath, want.key, want.value)
+			}
+
+			// Verify these buckets don't exist
+			for _, noBuckets := range tt.noBuckets {
+				dbtest.NoBucket(t, dbPath, noBuckets, "the bucket exists")
+			}
 		})
 	}
 }

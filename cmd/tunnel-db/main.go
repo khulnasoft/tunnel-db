@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+
+	"go.khulnasoft.com/tunnel-db/pkg/github"
 
 	"go.khulnasoft.com/tunnel-db/pkg"
 )
@@ -12,7 +15,11 @@ var (
 )
 
 func main() {
-	ac := pkg.AppConfig{}
+	ctx := context.Background()
+	ac := pkg.AppConfig{
+		Client: github.NewClient(ctx),
+	}
+
 	app := ac.NewApp(version)
 	err := app.Run(os.Args)
 	if err != nil {

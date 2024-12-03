@@ -3,12 +3,17 @@ package pkg
 import (
 	"time"
 
-	"github.com/urfave/cli"
+	"go.khulnasoft.com/tunnel-db/pkg/github"
+
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
+
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc"
+	"github.com/urfave/cli"
 )
 
-type AppConfig struct{}
+type AppConfig struct {
+	Client github.VCSClientInterface
+}
 
 func (ac *AppConfig) NewApp(version string) *cli.App {
 	app := cli.NewApp()
@@ -22,13 +27,17 @@ func (ac *AppConfig) NewApp(version string) *cli.App {
 			Usage:  "build a database file",
 			Action: build,
 			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "light",
+					Usage: "insert only CVE-ID and severity",
+				},
 				cli.StringSliceFlag{
 					Name:  "only-update",
 					Usage: "update db only specified distribution",
 					Value: func() *cli.StringSlice {
 						var targets cli.StringSlice
 						for _, v := range vulnsrc.All {
-							targets = append(targets, string(v.Name()))
+							targets = append(targets, v.Name())
 						}
 						return &targets
 					}(),
@@ -43,6 +52,17 @@ func (ac *AppConfig) NewApp(version string) *cli.App {
 					Usage:  "update interval",
 					Value:  24 * time.Hour,
 					EnvVar: "UPDATE_INTERVAL",
+				},
+			},
+		},
+		{
+			Name:   "upload",
+			Usage:  "upload database files to GitHub Release",
+			Action: ac.upload,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "dir",
+					Usage: "dir",
 				},
 			},
 		},

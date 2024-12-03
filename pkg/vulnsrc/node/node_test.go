@@ -1,183 +1,232 @@
 package node
 
 import (
-	"path/filepath"
+	"fmt"
+	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrctest"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
+	"github.com/stretchr/testify/assert"
+	bolt "go.etcd.io/bbolt"
 )
 
-func TestVulnSrc_Update(t *testing.T) {
-	tests := []struct {
-		name       string
-		dir        string
-		wantValues []vulnsrctest.WantValues
-		wantErr    string
+func TestVulnSrc_Commit(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		inputFile              string
+		putAdvisoryDetail      []db.OperationPutAdvisoryDetailExpectation
+		putVulnerabilityDetail []db.OperationPutVulnerabilityDetailExpectation
+		putSeverity            []db.OperationPutSeverityExpectation
+		expectedErrorMsg       string
 	}{
 		{
-			name: "happy path, npm package only includes CVSS score",
-			dir:  filepath.Join("testdata", "happy", "node_cvssnumberonly"),
-			wantValues: []vulnsrctest.WantValues{
+			name:      "happy path, npm package only includes CVSS score",
+			inputFile: "npm_cvssnumberonly.json",
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
 				{
-					Key: []string{"data-source", "npm::Node.js Ecosystem Security Working Group"},
-					Value: types.DataSource{
-						ID:   vulnerability.NodejsSecurityWg,
-						Name: "Node.js Ecosystem Security Working Group",
-						URL:  "https://github.com/nodejs/security-wg",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "nodejs-security-wg",
+						PkgName:         "bassmaster",
+						VulnerabilityID: "CVE-2014-7205",
+						Advisory: Advisory{
+							VulnerableVersions: "<=1.5.1",
+							PatchedVersions:    ">=1.5.2",
+						},
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2014-7205", "npm::Node.js Ecosystem Security Working Group", "bassmaster"},
-					Value: types.Advisory{
-						PatchedVersions:    []string{">=1.5.2"},
-						VulnerableVersions: []string{"<=1.5.1"},
-					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "CVE-2014-7205", "nodejs-security-wg"},
-					Value: types.VulnerabilityDetail{
-						ID:          "CVE-2014-7205",
-						Title:       "Arbitrary JavaScript Execution",
-						Description: "A vulnerability exists in bassmaster <= 1.5.1 that allows for an attacker to provide arbitrary JavaScript that is then executed server side via eval.",
-						References:  []string{"https://www.npmjs.org/package/bassmaster", "https://github.com/hapijs/bassmaster/commit/b751602d8cb7194ee62a61e085069679525138c4"},
-						CvssScore:   6.5,
-					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2014-7205"},
-					Value: map[string]interface{}{},
 				},
 			},
-		},
-		{
-			name: "happy path, npm package includes CVSS score and severity string",
-			dir:  filepath.Join("testdata", "happy", "node_cvssnumberandstring"),
-			wantValues: []vulnsrctest.WantValues{
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key: []string{"data-source", "npm::Node.js Ecosystem Security Working Group"},
-					Value: types.DataSource{
-						ID:   vulnerability.NodejsSecurityWg,
-						Name: "Node.js Ecosystem Security Working Group",
-						URL:  "https://github.com/nodejs/security-wg",
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2014-7205",
+						Source:          vulnerability.NodejsSecurityWg,
+						Vulnerability: types.VulnerabilityDetail{
+							ID:          "CVE-2014-7205",
+							CvssScore:   6.5,
+							References:  []string{"https://www.npmjs.org/package/bassmaster", "https://github.com/hapijs/bassmaster/commit/b751602d8cb7194ee62a61e085069679525138c4"},
+							Title:       "Arbitrary JavaScript Execution",
+							Description: "A vulnerability exists in bassmaster <= 1.5.1 that allows for an attacker to provide arbitrary JavaScript that is then executed server side via eval.",
+						},
 					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2014-7205", "npm::Node.js Ecosystem Security Working Group", "bassmaster"},
-					Value: types.Advisory{
-						PatchedVersions:    []string{">=1.5.2"},
-						VulnerableVersions: []string{"<=1.5.1"},
-					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "CVE-2014-7205", "nodejs-security-wg"},
-					Value: types.VulnerabilityDetail{
-						ID:          "CVE-2014-7205",
-						Title:       "Arbitrary JavaScript Execution",
-						Description: "A vulnerability exists in bassmaster <= 1.5.1 that allows for an attacker to provide arbitrary JavaScript that is then executed server side via eval.",
-						References:  []string{"https://www.npmjs.org/package/bassmaster", "https://github.com/hapijs/bassmaster/commit/b751602d8cb7194ee62a61e085069679525138c4"},
-						CvssScore:   6.5,
-					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2014-7205"},
-					Value: map[string]interface{}{},
 				},
 			},
-		},
-		{
-			name: "happy-(ish) path, node.js core is skipped",
-			dir:  filepath.Join("testdata", "happy", "core"),
-			wantValues: []vulnsrctest.WantValues{
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key: []string{"data-source", "npm::Node.js Ecosystem Security Working Group"},
-					Value: types.DataSource{
-						ID:   vulnerability.NodejsSecurityWg,
-						Name: "Node.js Ecosystem Security Working Group",
-						URL:  "https://github.com/nodejs/security-wg",
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2014-7205",
+						Severity:        types.SeverityUnknown,
 					},
 				},
 			},
 		},
 		{
-			name: "happy-(ish) path, npm package includes no cvss and no severity",
-			dir:  filepath.Join("testdata", "happy", "npm_nocvssseverity"),
-			wantValues: []vulnsrctest.WantValues{
+			name:      "happy path, npm package includes CVSS score and severity string",
+			inputFile: "npm_cvssnumberandstring.json",
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
 				{
-					Key: []string{"data-source", "npm::Node.js Ecosystem Security Working Group"},
-					Value: types.DataSource{
-						ID:   vulnerability.NodejsSecurityWg,
-						Name: "Node.js Ecosystem Security Working Group",
-						URL:  "https://github.com/nodejs/security-wg",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "nodejs-security-wg",
+						PkgName:         "bassmaster",
+						VulnerabilityID: "CVE-2014-7205",
+						Advisory: Advisory{
+							VulnerableVersions: "<=1.5.1",
+							PatchedVersions:    ">=1.5.2",
+						},
 					},
 				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key:   []string{"advisory-detail", "NSWG-ECO-0", "npm::Node.js Ecosystem Security Working Group", "missingcvss-missingseverity-package"},
-					Value: types.Advisory{},
-				},
-				{
-					Key: []string{"vulnerability-detail", "NSWG-ECO-0", "nodejs-security-wg"},
-					Value: types.VulnerabilityDetail{
-						ID:          "NSWG-ECO-0",
-						Description: "The c-ares function ares_parse_naptr_reply(), which is used for parsing NAPTR\nresponses, could be triggered to read memory outside of the given input buffer\nif the passed in DNS response packet was crafted in a particular way.\n\n",
-						CvssScore:   -1,
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2014-7205",
+						Source:          vulnerability.NodejsSecurityWg,
+						Vulnerability: types.VulnerabilityDetail{
+							ID:          "CVE-2014-7205",
+							CvssScore:   6.5,
+							References:  []string{"https://www.npmjs.org/package/bassmaster", "https://github.com/hapijs/bassmaster/commit/b751602d8cb7194ee62a61e085069679525138c4"},
+							Title:       "Arbitrary JavaScript Execution",
+							Description: "A vulnerability exists in bassmaster <= 1.5.1 that allows for an attacker to provide arbitrary JavaScript that is then executed server side via eval.",
+						},
 					},
 				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key:   []string{"vulnerability-id", "NSWG-ECO-0"},
-					Value: map[string]interface{}{},
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "CVE-2014-7205",
+						Severity:        types.SeverityUnknown,
+					},
 				},
 			},
 		},
 		{
-			name: "happy-(ish) path, npm package includes null cvss",
-			dir:  filepath.Join("testdata", "happy", "npm_nullcvssscore"),
-			wantValues: []vulnsrctest.WantValues{
+			name:      "happy-(ish) path, core node includes CVSS score and a severity string",
+			inputFile: "core_cvssnumberandstring.json",
+		},
+		{
+			name:      "happy-(ish) path, core node includes no cvss and no severity",
+			inputFile: "core_nocvssscorepresent.json",
+		},
+		{
+			name:      "happy-(ish) path, npm package includes no cvss and no severity",
+			inputFile: "npm_nocvssseverity.json",
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
 				{
-					Key: []string{"data-source", "npm::Node.js Ecosystem Security Working Group"},
-					Value: types.DataSource{
-						ID:   vulnerability.NodejsSecurityWg,
-						Name: "Node.js Ecosystem Security Working Group",
-						URL:  "https://github.com/nodejs/security-wg",
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "nodejs-security-wg",
+						PkgName:         "missingcvss-missingseverity-package",
+						VulnerabilityID: "NSWG-ECO-0",
+						Advisory:        Advisory{},
 					},
 				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
 				{
-					Key: []string{"advisory-detail", "NSWG-ECO-334", "npm::Node.js Ecosystem Security Working Group", "hubl-server"},
-					Value: types.Advisory{
-						PatchedVersions:    []string{"<0.0.0"},
-						VulnerableVersions: []string{"<=99.999.99999"},
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "NSWG-ECO-0",
+						Source:          vulnerability.NodejsSecurityWg,
+						Vulnerability: types.VulnerabilityDetail{
+							ID:          "NSWG-ECO-0",
+							CvssScore:   -1,
+							Description: "The c-ares function ares_parse_naptr_reply(), which is used for parsing NAPTR\nresponses, could be triggered to read memory outside of the given input buffer\nif the passed in DNS response packet was crafted in a particular way.\n\n",
+						},
 					},
 				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
 				{
-					Key: []string{"vulnerability-detail", "NSWG-ECO-334", "nodejs-security-wg"},
-					Value: types.VulnerabilityDetail{
-						ID:          "NSWG-ECO-334",
-						Title:       "Downloads resources over HTTP",
-						Description: "The hubl-server module is a wrapper for the HubL Development Server.\n\nDuring installation hubl-server downloads a set of dependencies from api.hubapi.com. It appears in the code that these files are downloaded over HTTPS however the api.hubapi.com endpoint redirects to a HTTP url. Because of this behavior an attacker with the ability to man-in-the-middle a developer or system performing a package installation could compromise the integrity of the installation.",
-						CvssScore:   -1,
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "NSWG-ECO-0",
+						Severity:        types.SeverityUnknown,
 					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "NSWG-ECO-334"},
-					Value: map[string]interface{}{},
 				},
 			},
 		},
 		{
-			name:    "sad path, invalid json",
-			dir:     filepath.Join("testdata", "sad"),
-			wantErr: "invalid character",
+			name:      "happy-(ish) path, npm package includes null cvss",
+			inputFile: "npm_nullcvssscore.json",
+			putAdvisoryDetail: []db.OperationPutAdvisoryDetailExpectation{
+				{
+					Args: db.OperationPutAdvisoryDetailArgs{
+						TxAnything:      true,
+						Source:          "nodejs-security-wg",
+						PkgName:         "hubl-server",
+						VulnerabilityID: "NSWG-ECO-334",
+						Advisory: Advisory{
+							VulnerableVersions: "<=99.999.99999",
+							PatchedVersions:    "<0.0.0",
+						},
+					},
+				},
+			},
+			putVulnerabilityDetail: []db.OperationPutVulnerabilityDetailExpectation{
+				{
+					Args: db.OperationPutVulnerabilityDetailArgs{
+						TxAnything:      true,
+						VulnerabilityID: "NSWG-ECO-334",
+						Source:          vulnerability.NodejsSecurityWg,
+						Vulnerability: types.VulnerabilityDetail{
+							ID:          "NSWG-ECO-334",
+							CvssScore:   -1,
+							Description: "The hubl-server module is a wrapper for the HubL Development Server.\n\nDuring installation hubl-server downloads a set of dependencies from api.hubapi.com. It appears in the code that these files are downloaded over HTTPS however the api.hubapi.com endpoint redirects to a HTTP url. Because of this behavior an attacker with the ability to man-in-the-middle a developer or system performing a package installation could compromise the integrity of the installation.",
+							Title:       "Downloads resources over HTTP",
+						},
+					},
+				},
+			},
+			putSeverity: []db.OperationPutSeverityExpectation{
+				{
+					Args: db.OperationPutSeverityArgs{
+						TxAnything:      true,
+						VulnerabilityID: "NSWG-ECO-334",
+						Severity:        types.SeverityUnknown,
+					},
+				},
+			},
+		},
+		{
+			name:             "sad path, invalid json",
+			inputFile:        "invalidvuln.json",
+			expectedErrorMsg: "invalid character",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			vs := NewVulnSrc()
-			vulnsrctest.TestUpdate(t, vs, vulnsrctest.TestUpdateArgs{
-				Dir:        tt.dir,
-				WantValues: tt.wantValues,
-				WantErr:    tt.wantErr,
-			})
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := &bolt.Tx{}
+			mockDBConfig := new(db.MockOperation)
+			mockDBConfig.ApplyPutAdvisoryDetailExpectations(tc.putAdvisoryDetail)
+			mockDBConfig.ApplyPutVulnerabilityDetailExpectations(tc.putVulnerabilityDetail)
+			mockDBConfig.ApplyPutSeverityExpectations(tc.putSeverity)
+
+			ac := VulnSrc{dbc: mockDBConfig}
+
+			filePath := fmt.Sprintf("testdata/%s", tc.inputFile)
+			f, err := os.Open(filePath)
+			require.NoError(t, err, tc.name)
+			err = ac.commit(tx, f)
+
+			switch {
+			case tc.expectedErrorMsg != "":
+				assert.Contains(t, err.Error(), tc.expectedErrorMsg, tc.name)
+			default:
+				assert.NoError(t, err, tc.name)
+			}
+			mockDBConfig.AssertExpectations(t)
 		})
 	}
 }

@@ -4,36 +4,56 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
+	"github.com/stretchr/testify/require"
+
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/bucket"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
 func TestBucketName(t *testing.T) {
 	testCases := []struct {
 		name       string
-		ecosystem  types.Ecosystem
+		ecosystem  string
 		dataSource string
 		want       string
 		wantErr    string
 	}{
 		{
-			name:       "go",
-			ecosystem:  vulnerability.Go,
+			name:       "happy path go",
+			ecosystem:  "go",
 			dataSource: "GitLab Advisory Database",
 			want:       "go::GitLab Advisory Database",
 		},
 		{
-			name:       "rubygems",
-			ecosystem:  vulnerability.RubyGems,
-			dataSource: "GitHub Advisory Database",
-			want:       "rubygems::GitHub Advisory Database",
+			name:       "happy path golang",
+			ecosystem:  "golang",
+			dataSource: "GitLab Advisory Database",
+			want:       "go::GitLab Advisory Database",
+		},
+		{
+			name:       "happy path maven",
+			ecosystem:  "maven",
+			dataSource: "GitLab Advisory Database",
+			want:       "maven::GitLab Advisory Database",
+		},
+		{
+			name:       "sad path unknown",
+			ecosystem:  "unknown",
+			dataSource: "GitLab Advisory Database",
+			wantErr:    "unknown ecosystem",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := bucket.Name(tc.ecosystem, tc.dataSource)
+			got, err := bucket.Name(tc.ecosystem, tc.dataSource)
+			if tc.wantErr != "" {
+				require.NotNil(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+
 			assert.Equal(t, tc.want, got)
 		})
 	}

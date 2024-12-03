@@ -4,26 +4,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
+
+	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"golang.org/x/xerrors"
 )
 
 const (
-	vulnListDir = "vuln-list-redhat"
-	apiDir      = "api"
+	redhatDir      = "redhat"
+	platformFormat = "Red Hat Enterprise Linux %s"
+)
 
-	resourceURL = "https://access.redhat.com/security/cve/%s"
+var (
+	targetPlatforms = []string{"Red Hat Enterprise Linux 5", "Red Hat Enterprise Linux 6",
+		"Red Hat Enterprise Linux 7", "Red Hat Enterprise Linux 8"}
+	targetStatus = []string{"Affected", "Fix deferred", "Will not fix", "Out of support scope"}
 )
 
 type VulnSrc struct {
@@ -36,16 +41,16 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
+func (vs VulnSrc) Name() string {
 	return vulnerability.RedHat
 }
 
 func (vs VulnSrc) Update(dir string) error {
-	rootDir := filepath.Join(dir, vulnListDir, apiDir)
+	rootDir := filepath.Join(dir, "vuln-list", redhatDir)
 
 	var cves []RedhatCVE
 	err := utils.FileWalk(rootDir, func(r io.Reader, _ string) error {
-		content, err := io.ReadAll(r)
+		content, err := ioutil.ReadAll(r)
 		if err != nil {
 			return err
 		}
@@ -115,6 +120,9 @@ func (vs VulnSrc) save(cves []RedhatCVE) error {
 
 func (vs VulnSrc) commit(tx *bolt.Tx, cves []RedhatCVE) error {
 	for _, cve := range cves {
+		if err := vs.putAdvisoryDetail(tx, cve); err != nil {
+			return err
+		}
 		if err := vs.putVulnerabilityDetail(tx, cve); err != nil {
 			return err
 		}
@@ -123,11 +131,41 @@ func (vs VulnSrc) commit(tx *bolt.Tx, cves []RedhatCVE) error {
 	return nil
 }
 
+func (vs VulnSrc) putAdvisoryDetail(tx *bolt.Tx, cve RedhatCVE) error {
+	// OVAL v2 contains unpatched vulnerabilities as well, so this process is usually unnecessary.
+	// But OVAL v2 is missing some unpatched vulnerabilities and Security Data API should be used for now.
+	for _, pkgState := range cve.PackageState {
+		// Add modular namespace: nodejs:12/npm => nodejs:12::npm
+		pkgName := strings.ReplaceAll(pkgState.PackageName, "/", "::")
+		if pkgName == "" {
+			continue
+		}
+
+		// e.g. Red Hat Enterprise Linux 7
+		platformName := pkgState.ProductName
+		if !utils.StringInSlice(platformName, targetPlatforms) {
+			continue
+		}
+		if !utils.StringInSlice(pkgState.FixState, targetStatus) {
+			continue
+		}
+
+		advisory := types.Advisory{
+			// It means this vulnerability affects all versions
+			FixedVersion: "",
+		}
+		if err := vs.dbc.PutAdvisoryDetail(tx, cve.Name, platformName, pkgName, advisory); err != nil {
+			return xerrors.Errorf("failed to save Red Hat advisory: %w", err)
+		}
+	}
+	return nil
+}
+
 func (vs VulnSrc) putVulnerabilityDetail(tx *bolt.Tx, cve RedhatCVE) error {
 	cvssScore, _ := strconv.ParseFloat(cve.Cvss.CvssBaseScore, 64)
 	cvss3Score, _ := strconv.ParseFloat(cve.Cvss3.Cvss3BaseScore, 64)
+
 	title := strings.TrimPrefix(strings.TrimSpace(cve.Bugzilla.Description), cve.Name)
-	references := append(cve.References, fmt.Sprintf(resourceURL, cve.Name))
 
 	vuln := types.VulnerabilityDetail{
 		CvssScore:    cvssScore,
@@ -135,7 +173,7 @@ func (vs VulnSrc) putVulnerabilityDetail(tx *bolt.Tx, cve RedhatCVE) error {
 		CvssScoreV3:  cvss3Score,
 		CvssVectorV3: cve.Cvss3.Cvss3ScoringVector,
 		Severity:     severityFromThreat(cve.ThreatSeverity),
-		References:   references,
+		References:   cve.References,
 		Title:        strings.TrimSpace(title),
 		Description:  strings.TrimSpace(strings.Join(cve.Details, "")),
 	}
@@ -143,16 +181,24 @@ func (vs VulnSrc) putVulnerabilityDetail(tx *bolt.Tx, cve RedhatCVE) error {
 		return xerrors.Errorf("failed to save Red Hat vulnerability: %w", err)
 	}
 
-	// for optimization
-	if err := vs.dbc.PutVulnerabilityID(tx, cve.Name); err != nil {
-		return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+	// for light DB
+	if err := vs.dbc.PutSeverity(tx, cve.Name, types.SeverityUnknown); err != nil {
+		return xerrors.Errorf("failed to save Red Hat vulnerability severity: %w", err)
 	}
 	return nil
 }
 
+func (vs VulnSrc) Get(majorVersion string, pkgName string) ([]types.Advisory, error) {
+	bucket := fmt.Sprintf(platformFormat, majorVersion)
+	advisories, err := vs.dbc.GetAdvisories(bucket, pkgName)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get Red Hat advisories: %w", err)
+	}
+	return advisories, nil
+}
+
 func severityFromThreat(sev string) types.Severity {
-	severity := cases.Title(language.English).String(sev)
-	switch severity {
+	switch strings.Title(sev) {
 	case "Low":
 		return types.SeverityLow
 	case "Moderate":

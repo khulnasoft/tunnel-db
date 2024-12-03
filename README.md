@@ -28,9 +28,7 @@ Tunnel uses `tunnel-db` internally to manipulate vulnerability DB. This DB has v
 
 ### CLI
 
-The `tunnel-db` CLI tool builds vulnerability DBs. A [GitHub Actions workflow](.github/workflows/cron.yml)
-periodically builds a fresh version of the vulnerability DB using `tunnel-db` and uploads it to the GitHub
-Container Registry (see [Download the vulnerability database](#download-the-vulnerability-database) below).
+`tunnel-db` builds vulnerability DBs on GitHub Actions and uploads them to GitHub Release periodically.
 
 ```
 NAME:
@@ -44,6 +42,7 @@ VERSION:
 
 COMMANDS:
      build    build a database file
+     upload   upload database files to GitHub Release
      help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -55,50 +54,14 @@ GLOBAL OPTIONS:
 
 You can utilize `make db-all` to build the database, the DB artifact is outputted to the assets folder.
 
+If you want to build the light DB, please set your environment to contain `DB_TYPE=tunnel-light`.
+
 Alternatively Docker is supported, you can run `docker build . -t tunnel-db`.
+
+If you want to build the light DB, please run `docker build --build-arg DB_TYPE=tunnel-light . -t tunnel-db-light`
 
 If you want to build a tunnel integration test DB, please run `make create-test-db`
 
 ## Update interval
 
-Tunnel DB is built every 6 hours.
-By default, the update interval specified in the metadata file is 24 hours.
-If you need to update Tunnel DB more frequently, you can upload a new Tunnel DB manually.
-
-## Download the vulnerability database
-
-### version 1 (deprecated)
-
-Tunnel DB v1 reached the end of support on February 2023. Please upgrade Tunnel to v0.23.0 or later.
-
-Read more about the Tunnel DB v1 deprecation in [the discussion](https://github.com/khulnasoft/tunnel/discussions/1653).
-
-### version 2
-
-Tunnel DB v2 is hosted on [GHCR](https://github.com/orgs/khulnasoft/packages/container/package/tunnel-db).
-Although GitHub displays the `docker pull` command by default, please note that it cannot be downloaded using `docker pull` as it is not a container image.
-
-You can download the actual compiled database via [Tunnel](https://khulnasoft.github.io/tunnel/) or [Oras CLI](https://oras.land/cli/).
-
-Tunnel:
-
-```sh
-TUNNEL_TEMP_DIR=$(mktemp -d)
-tunnel --cache-dir $TUNNEL_TEMP_DIR image --download-db-only
-tar -cf ./db.tar.gz -C $TUNNEL_TEMP_DIR/db metadata.json tunnel.db
-rm -rf $TUNNEL_TEMP_DIR
-```
-
-oras >= v0.13.0:
-
-```sh
-$ oras pull ghcr.io/khulnasoft/tunnel-db:2
-```
-
-oras < v0.13.0:
-
-```sh
-$ oras pull -a ghcr.io/khulnasoft/tunnel-db:2
-```
-
-The database can be used for [Air-Gapped Environment](https://khulnasoft.github.io/tunnel/latest/docs/advanced/air-gap/).
+Every 6 hours

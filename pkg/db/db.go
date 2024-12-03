@@ -3,78 +3,80 @@ package db
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
+
+	"go.khulnasoft.com/tunnel-db/pkg/types"
 
 	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/log"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"golang.org/x/xerrors"
 )
 
 type CustomPut func(dbc Operation, tx *bolt.Tx, adv interface{}) error
 
-const SchemaVersion = 2
+type Type int
 
-var db *bolt.DB
+const (
+	SchemaVersion = 1
+
+	TypeFull Type = iota
+	TypeLight
+)
+
+var (
+	db    *bolt.DB
+	dbDir string
+)
 
 type Operation interface {
 	BatchUpdate(fn func(*bolt.Tx) error) (err error)
 
-	GetVulnerabilityDetail(cveID string) (detail map[types.SourceID]types.VulnerabilityDetail, err error)
-	PutVulnerabilityDetail(tx *bolt.Tx, vulnerabilityID string, source types.SourceID,
+	GetVulnerabilityDetail(cveID string) (detail map[string]types.VulnerabilityDetail, err error)
+	PutVulnerabilityDetail(tx *bolt.Tx, vulnerabilityID string, source string,
 		vulnerability types.VulnerabilityDetail) (err error)
 	DeleteVulnerabilityDetailBucket() (err error)
 
-	ForEachAdvisory(sources []string, pkgName string) (value map[string]Value, err error)
+	PutAdvisory(tx *bolt.Tx, source string, pkgName string, vulnerabilityID string,
+		advisory interface{}) (err error)
+	ForEachAdvisory(source string, pkgName string) (value map[string][]byte, err error)
 	GetAdvisories(source string, pkgName string) (advisories []types.Advisory, err error)
 
-	PutVulnerabilityID(tx *bolt.Tx, vulnerabilityID string) (err error)
-	ForEachVulnerabilityID(fn func(tx *bolt.Tx, cveID string) error) (err error)
+	PutSeverity(tx *bolt.Tx, vulnerabilityID string, severity types.Severity) (err error)
+	GetSeverity(vulnerabilityID string) (severity types.Severity, err error)
+	ForEachSeverity(fn func(tx *bolt.Tx, cveID string, severity types.Severity) error) (err error)
+
+	DeleteSeverityBucket() (err error)
 
 	PutVulnerability(tx *bolt.Tx, vulnerabilityID string, vulnerability types.Vulnerability) (err error)
 	GetVulnerability(vulnerabilityID string) (vulnerability types.Vulnerability, err error)
 
-	SaveAdvisoryDetails(tx *bolt.Tx, cveID string) (err error)
-	PutAdvisoryDetail(tx *bolt.Tx, vulnerabilityID, pkgName string, nestedBktNames []string, advisory interface{}) (err error)
+	GetAdvisoryDetails(cveID string) ([]types.AdvisoryDetail, error)
+	PutAdvisoryDetail(tx *bolt.Tx, vulnerabilityID string, source string, pkgName string,
+		advisory interface{}) (err error)
 	DeleteAdvisoryDetailBucket() error
-
-	PutDataSource(tx *bolt.Tx, bktName string, source types.DataSource) (err error)
-
-	// For Red Hat
-	PutRedHatRepositories(tx *bolt.Tx, repository string, cpeIndices []int) (err error)
-	PutRedHatNVRs(tx *bolt.Tx, nvr string, cpeIndices []int) (err error)
-	PutRedHatCPEs(tx *bolt.Tx, cpeIndex int, cpe string) (err error)
-	RedHatRepoToCPEs(repository string) (cpeIndices []int, err error)
-	RedHatNVRToCPEs(nvr string) (cpeIndices []int, err error)
 }
 
-type Config struct{}
-
-type Option func(*Options)
-
-type Options struct {
-	boltOptions *bolt.Options
+type Metadata struct {
+	Version      int  `json:",omitempty"`
+	Type         Type `json:",omitempty"`
+	NextUpdate   time.Time
+	UpdatedAt    time.Time
+	DownloadedAt time.Time
 }
 
-func WithBoltOptions(boltOpts *bolt.Options) Option {
-	return func(opts *Options) {
-		opts.boltOptions = boltOpts
-	}
+type Config struct {
 }
 
-func Init(dbDir string, opts ...Option) (err error) {
-	dbOptions := &Options{}
-	for _, opt := range opts {
-		opt(dbOptions)
-	}
-
+func Init(cacheDir string) (err error) {
+	dbPath := Path(cacheDir)
+	dbDir = filepath.Dir(dbPath)
 	if err = os.MkdirAll(dbDir, 0700); err != nil {
 		return xerrors.Errorf("failed to mkdir: %w", err)
 	}
-	dbPath := Path(dbDir)
 
 	// bbolt sometimes occurs the fatal error of "unexpected fault address".
 	// In that case, the local DB should be broken and needs to be removed.
@@ -84,28 +86,25 @@ func Init(dbDir string, opts ...Option) (err error) {
 			if err = os.Remove(dbPath); err != nil {
 				return
 			}
-			db, err = bolt.Open(dbPath, 0644, dbOptions.boltOptions)
+			db, err = bolt.Open(dbPath, 0600, nil)
 		}
 		debug.SetPanicOnFault(false)
 	}()
 
-	db, err = bolt.Open(dbPath, 0644, dbOptions.boltOptions)
+	db, err = bolt.Open(dbPath, 0600, nil)
 	if err != nil {
 		return xerrors.Errorf("failed to open db: %w", err)
 	}
 	return nil
 }
 
-func Path(dbDir string) string {
+func Path(cacheDir string) string {
+	dbDir = filepath.Join(cacheDir, "db")
 	dbPath := filepath.Join(dbDir, "tunnel.db")
 	return dbPath
 }
 
 func Close() error {
-	// Skip closing the database if the connection is not established.
-	if db == nil {
-		return nil
-	}
 	if err := db.Close(); err != nil {
 		return xerrors.Errorf("failed to close DB: %w", err)
 	}
@@ -116,6 +115,42 @@ func (dbc Config) Connection() *bolt.DB {
 	return db
 }
 
+func (dbc Config) GetVersion() int {
+	metadata, err := dbc.GetMetadata()
+	if err != nil {
+		return 0
+	}
+	return metadata.Version
+}
+
+func (dbc Config) GetMetadata() (Metadata, error) {
+	var metadata Metadata
+	value, err := Config{}.get("tunnel", "metadata", "data")
+	if err != nil {
+		return Metadata{}, err
+	}
+	if err = json.Unmarshal(value, &metadata); err != nil {
+		return Metadata{}, err
+	}
+	return metadata, nil
+}
+
+func (dbc Config) SetMetadata(metadata Metadata) error {
+	err := dbc.update("tunnel", "metadata", "data", metadata)
+	if err != nil {
+		return xerrors.Errorf("failed to save metadata: %w", err)
+	}
+	return nil
+}
+
+func (dbc Config) StoreMetadata(metadata Metadata, dir string) error {
+	b, err := json.Marshal(metadata)
+	if err != nil {
+		return xerrors.Errorf("failed to store metadata: %w", err)
+	}
+	return ioutil.WriteFile(filepath.Join(dir, "metadata.json"), b, 0600)
+}
+
 func (dbc Config) BatchUpdate(fn func(tx *bolt.Tx) error) error {
 	err := db.Batch(fn)
 	if err != nil {
@@ -124,52 +159,47 @@ func (dbc Config) BatchUpdate(fn func(tx *bolt.Tx) error) error {
 	return nil
 }
 
-func (dbc Config) put(tx *bolt.Tx, bktNames []string, key string, value interface{}) error {
-	if len(bktNames) == 0 {
-		return xerrors.Errorf("empty bucket name")
-	}
-
-	bkt, err := tx.CreateBucketIfNotExists([]byte(bktNames[0]))
+func (dbc Config) update(rootBucket, nestedBucket, key string, value interface{}) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		return dbc.putNestedBucket(tx, rootBucket, nestedBucket, key, value)
+	})
 	if err != nil {
-		return xerrors.Errorf("failed to create '%s' bucket: %w", bktNames[0], err)
+		return xerrors.Errorf("error in db update: %w", err)
 	}
+	return err
+}
 
-	for _, bktName := range bktNames[1:] {
-		bkt, err = bkt.CreateBucketIfNotExists([]byte(bktName))
-		if err != nil {
-			return xerrors.Errorf("failed to create a bucket: %w", err)
-		}
+func (dbc Config) putNestedBucket(tx *bolt.Tx, rootBucket, nestedBucket, key string, value interface{}) error {
+	root, err := tx.CreateBucketIfNotExists([]byte(rootBucket))
+	if err != nil {
+		return xerrors.Errorf("failed to create a bucket: %w", err)
+	}
+	return dbc.put(root, nestedBucket, key, value)
+}
+
+func (dbc Config) put(root *bolt.Bucket, nestedBucket, key string, value interface{}) error {
+	nested, err := root.CreateBucketIfNotExists([]byte(nestedBucket))
+	if err != nil {
+		return xerrors.Errorf("failed to create a bucket: %w", err)
 	}
 	v, err := json.Marshal(value)
 	if err != nil {
 		return xerrors.Errorf("failed to unmarshal JSON: %w", err)
 	}
-
-	return bkt.Put([]byte(key), v)
+	return nested.Put([]byte(key), v)
 }
 
-func (dbc Config) get(bktNames []string, key string) (value []byte, err error) {
+func (dbc Config) get(rootBucket, nestedBucket, key string) (value []byte, err error) {
 	err = db.View(func(tx *bolt.Tx) error {
-		if len(bktNames) == 0 {
-			return xerrors.Errorf("empty bucket name")
-		}
-
-		bkt := tx.Bucket([]byte(bktNames[0]))
-		if bkt == nil {
+		root := tx.Bucket([]byte(rootBucket))
+		if root == nil {
 			return nil
 		}
-		for _, bktName := range bktNames[1:] {
-			bkt = bkt.Bucket([]byte(bktName))
-			if bkt == nil {
-				return nil
-			}
+		nested := root.Bucket([]byte(nestedBucket))
+		if nested == nil {
+			return nil
 		}
-		dbValue := bkt.Get([]byte(key))
-
-		// Copy the byte slice so it can be used outside of the current transaction
-		value = make([]byte, len(dbValue))
-		copy(value, dbValue)
-
+		value = nested.Get([]byte(key))
 		return nil
 	})
 	if err != nil {
@@ -178,19 +208,9 @@ func (dbc Config) get(bktNames []string, key string) (value []byte, err error) {
 	return value, nil
 }
 
-type Value struct {
-	Source  types.DataSource
-	Content []byte
-}
-
-func (dbc Config) forEach(bktNames []string) (map[string]Value, error) {
-	if len(bktNames) < 2 {
-		return nil, xerrors.Errorf("bucket must be nested: %v", bktNames)
-	}
-	rootBucket, nestedBuckets := bktNames[0], bktNames[1:]
-
-	values := map[string]Value{}
-	err := db.View(func(tx *bolt.Tx) error {
+func (dbc Config) forEach(rootBucket, nestedBucket string) (value map[string][]byte, err error) {
+	value = map[string][]byte{}
+	err = db.View(func(tx *bolt.Tx) error {
 		var rootBuckets []string
 
 		if strings.Contains(rootBucket, "::") {
@@ -211,38 +231,16 @@ func (dbc Config) forEach(bktNames []string) (map[string]Value, error) {
 				continue
 			}
 
-			source, err := dbc.getDataSource(tx, r)
-			if err != nil {
-				log.Logger.Debugf("Data source error: %s", err)
-			}
-
-			bkt := root
-			for _, nestedBkt := range nestedBuckets {
-				bkt = bkt.Bucket([]byte(nestedBkt))
-				if bkt == nil {
-					break
-				}
-			}
-			if bkt == nil {
+			nested := root.Bucket([]byte(nestedBucket))
+			if nested == nil {
 				continue
 			}
-
-			err = bkt.ForEach(func(k, v []byte) error {
-				if len(v) == 0 {
-					return nil
-				}
-				// Copy the byte slice so it can be used outside of the current transaction
-				copiedContent := make([]byte, len(v))
-				copy(copiedContent, v)
-
-				values[string(k)] = Value{
-					Source:  source,
-					Content: copiedContent,
-				}
+			err := nested.ForEach(func(k, v []byte) error {
+				value[string(k)] = v
 				return nil
 			})
 			if err != nil {
-				return xerrors.Errorf("db foreach error: %w", err)
+				return xerrors.Errorf("error in db foreach: %w", err)
 			}
 		}
 		return nil
@@ -250,7 +248,7 @@ func (dbc Config) forEach(bktNames []string) (map[string]Value, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get all key/value in the specified bucket: %w", err)
 	}
-	return values, nil
+	return value, nil
 }
 
 func (dbc Config) deleteBucket(bucketName string) error {

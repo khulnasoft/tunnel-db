@@ -1,7 +1,5 @@
 package oracleoval
 
-import "fmt"
-
 type OracleOVAL struct {
 	Title       string
 	Description string
@@ -10,7 +8,6 @@ type OracleOVAL struct {
 	Criteria    Criteria
 	Severity    string
 	Cves        []Cve
-	IssuedDate  Date `json:"issued,omitempty"`
 }
 
 type Reference struct {
@@ -36,19 +33,11 @@ type Criterion struct {
 }
 
 type Package struct {
-	Name  string
-	OSVer string
-}
-
-type AffectedPackage struct {
-	Package      Package
+	Name         string
 	FixedVersion string
 }
 
-type Date struct {
-	Date string `json:"date"`
-}
-
-func (p *Package) PlatformName() string {
-	return fmt.Sprintf(platformFormat, p.OSVer)
+type AffectedPackage struct {
+	Package Package
+	OSVer   string
 }

@@ -1,30 +1,26 @@
 package bundler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/db"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/bucket"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
 	"golang.org/x/xerrors"
 	"gopkg.in/yaml.v2"
+
+	"go.khulnasoft.com/tunnel-db/pkg/db"
+	"go.khulnasoft.com/tunnel-db/pkg/types"
+	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
 )
 
-const bundlerDir = "ruby-advisory-db"
+// https://github.com/rubysec/ruby-advisory-db.git
 
-var (
-	source = types.DataSource{
-		ID:   vulnerability.RubySec,
-		Name: "Ruby Advisory Database",
-		URL:  "https://github.com/rubysec/ruby-advisory-db",
-	}
-
-	bucketName = bucket.Name(vulnerability.RubyGems, source.Name)
+const (
+	bundlerDir = "ruby-advisory-db"
 )
 
 type RawAdvisory struct {
@@ -63,8 +59,8 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.RubySec
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -79,10 +75,6 @@ func (vs VulnSrc) update(repoPath string) error {
 	root := filepath.Join(repoPath, "gems")
 
 	err := vs.dbc.BatchUpdate(func(tx *bolt.Tx) error {
-		if err := vs.dbc.PutDataSource(tx, bucketName, source); err != nil {
-			return xerrors.Errorf("failed to put data source: %w", err)
-		}
-
 		if err := vs.walk(tx, root); err != nil {
 			return xerrors.Errorf("failed to walk ruby advisories: %w", err)
 		}
@@ -111,7 +103,7 @@ func (vs VulnSrc) walkFunc(err error, info os.FileInfo, path string, tx *bolt.Tx
 		return nil
 	}
 
-	buf, err := os.ReadFile(path)
+	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		return xerrors.Errorf("failed to read a file: %w", err)
 	}
@@ -135,32 +127,48 @@ func (vs VulnSrc) walkFunc(err error, info os.FileInfo, path string, tx *bolt.Tx
 	}
 
 	// for detecting vulnerabilities
-	a := types.Advisory{
+	a := Advisory{
 		PatchedVersions:    advisory.PatchedVersions,
 		UnaffectedVersions: advisory.UnaffectedVersions,
 	}
-
-	err = vs.dbc.PutAdvisoryDetail(tx, vulnerabilityID, advisory.Gem, []string{bucketName}, a)
+	err = vs.dbc.PutAdvisoryDetail(tx, vulnerabilityID, vulnerability.RubySec, advisory.Gem, a)
 	if err != nil {
 		return xerrors.Errorf("failed to save ruby advisory: %w", err)
 	}
 
 	// for displaying vulnerability detail
 	vuln := types.VulnerabilityDetail{
+		ID:          vulnerabilityID,
 		CvssScore:   advisory.CvssV2,
 		CvssScoreV3: advisory.CvssV3,
 		References:  append([]string{advisory.Url}, advisory.Related.Url...),
 		Title:       advisory.Title,
 		Description: advisory.Description,
 	}
-
-	if err = vs.dbc.PutVulnerabilityDetail(tx, vulnerabilityID, source.ID, vuln); err != nil {
+	if err = vs.dbc.PutVulnerabilityDetail(tx, vulnerabilityID, vulnerability.RubySec, vuln); err != nil {
 		return xerrors.Errorf("failed to save ruby vulnerability detail: %w", err)
 	}
 
-	// for optimization
-	if err = vs.dbc.PutVulnerabilityID(tx, vulnerabilityID); err != nil {
-		return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+	if err := vs.dbc.PutSeverity(tx, vulnerabilityID, types.SeverityUnknown); err != nil {
+		return xerrors.Errorf("failed to save ruby vulnerability severity: %w", err)
 	}
 	return nil
+}
+
+func (vs VulnSrc) Get(pkgName string) ([]Advisory, error) {
+	advisories, err := vs.dbc.ForEachAdvisory(vulnerability.RubySec, pkgName)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to iterate ruby vulnerabilities: %w", err)
+	}
+
+	var results []Advisory
+	for vulnID, a := range advisories {
+		var advisory Advisory
+		if err = json.Unmarshal(a, &advisory); err != nil {
+			return nil, xerrors.Errorf("failed to unmarshal advisory JSON: %w", err)
+		}
+		advisory.VulnerabilityID = vulnID
+		results = append(results, advisory)
+	}
+	return results, nil
 }

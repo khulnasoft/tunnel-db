@@ -9,25 +9,21 @@ import (
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/bucket"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
+
+// https://github.com/nodejs/security-wg.git
 
 const (
 	nodeDir = "nodejs-security-wg"
 )
 
 var (
-	source = types.DataSource{
-		ID:   vulnerability.NodejsSecurityWg,
-		Name: "Node.js Ecosystem Security Working Group",
-		URL:  "https://github.com/nodejs/security-wg",
-	}
-
-	bucketName = bucket.Name(vulnerability.Npm, source.Name)
+	repoPath string
 )
 
 type Number struct {
@@ -73,6 +69,12 @@ type RawAdvisory struct {
 	CvssScore          float64
 }
 
+type Advisory struct {
+	VulnerabilityID    string `json:",omitempty"`
+	VulnerableVersions string `json:",omitempty"`
+	PatchedVersions    string `json:",omitempty"`
+}
+
 type VulnSrc struct {
 	dbc db.Operation
 }
@@ -83,12 +85,12 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.NodejsSecurityWg
 }
 
-func (vs VulnSrc) Update(dir string) error {
-	repoPath := filepath.Join(dir, nodeDir)
+func (vs VulnSrc) Update(dir string) (err error) {
+	repoPath = filepath.Join(dir, nodeDir)
 	if err := vs.update(repoPath); err != nil {
 		return xerrors.Errorf("failed to update node vulnerabilities: %w", err)
 	}
@@ -99,9 +101,6 @@ func (vs VulnSrc) update(repoPath string) error {
 	root := filepath.Join(repoPath, "vuln")
 
 	err := vs.dbc.BatchUpdate(func(tx *bolt.Tx) error {
-		if err := vs.dbc.PutDataSource(tx, bucketName, source); err != nil {
-			return xerrors.Errorf("failed to put data source: %w", err)
-		}
 		if err := vs.walk(tx, root); err != nil {
 			return xerrors.Errorf("failed to walk node advisories: %w", err)
 		}
@@ -114,7 +113,7 @@ func (vs VulnSrc) update(repoPath string) error {
 }
 
 func (vs VulnSrc) walk(tx *bolt.Tx, root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(filepath.Join(repoPath, "vuln"), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -150,10 +149,13 @@ func (vs VulnSrc) commit(tx *bolt.Tx, f *os.File) error {
 		vulnerabilityIDs = []string{fmt.Sprintf("NSWG-ECO-%d", advisory.ID)}
 	}
 
-	adv := convertToGenericAdvisory(advisory)
+	a := Advisory{
+		VulnerableVersions: advisory.VulnerableVersions,
+		PatchedVersions:    advisory.PatchedVersions,
+	}
 	for _, vulnID := range vulnerabilityIDs {
 		// for detecting vulnerabilities
-		err = vs.dbc.PutAdvisoryDetail(tx, vulnID, advisory.ModuleName, []string{bucketName}, adv)
+		err := vs.dbc.PutAdvisoryDetail(tx, vulnID, vulnerability.NodejsSecurityWg, advisory.ModuleName, a)
 		if err != nil {
 			return xerrors.Errorf("failed to save node advisory: %w", err)
 		}
@@ -172,34 +174,32 @@ func (vs VulnSrc) commit(tx *bolt.Tx, f *os.File) error {
 			Title:       advisory.Title,
 			Description: advisory.Overview,
 		}
-		if err = vs.dbc.PutVulnerabilityDetail(tx, vulnID, source.ID, vuln); err != nil {
+		if err = vs.dbc.PutVulnerabilityDetail(tx, vulnID, vulnerability.NodejsSecurityWg, vuln); err != nil {
 			return xerrors.Errorf("failed to save node vulnerability detail: %w", err)
 		}
 
-		// for optimization
-		if err = vs.dbc.PutVulnerabilityID(tx, vulnID); err != nil {
-			return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+		if err := vs.dbc.PutSeverity(tx, vulnID, types.SeverityUnknown); err != nil {
+			return xerrors.Errorf("failed to save node vulnerability severity: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func convertToGenericAdvisory(advisory RawAdvisory) types.Advisory {
-	var vulnerable, patched []string
-	if advisory.VulnerableVersions != "" {
-		for _, ver := range strings.Split(advisory.VulnerableVersions, "||") {
-			vulnerable = append(vulnerable, strings.TrimSpace(ver))
-		}
-	}
-	if advisory.PatchedVersions != "" {
-		for _, ver := range strings.Split(advisory.PatchedVersions, "||") {
-			patched = append(patched, strings.TrimSpace(ver))
-		}
+func (vs VulnSrc) Get(pkgName string) ([]Advisory, error) {
+	advisories, err := vs.dbc.ForEachAdvisory(vulnerability.NodejsSecurityWg, pkgName)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to iterate node vulnerabilities: %w", err)
 	}
 
-	return types.Advisory{
-		VulnerableVersions: vulnerable,
-		PatchedVersions:    patched,
+	var results []Advisory
+	for vulnID, a := range advisories {
+		var advisory Advisory
+		if err = json.Unmarshal(a, &advisory); err != nil {
+			return nil, xerrors.Errorf("failed to unmarshal advisory JSON: %w", err)
+		}
+		advisory.VulnerabilityID = vulnID
+		results = append(results, advisory)
 	}
+	return results, nil
 }

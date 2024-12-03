@@ -90,6 +90,39 @@ func (_m *MockOperation) DeleteAdvisoryDetailBucket() error {
 	return r0
 }
 
+type OperationDeleteSeverityBucketReturns struct {
+	Err error
+}
+
+type OperationDeleteSeverityBucketExpectation struct {
+	Returns OperationDeleteSeverityBucketReturns
+}
+
+func (_m *MockOperation) ApplyDeleteSeverityBucketExpectation(e OperationDeleteSeverityBucketExpectation) {
+	var args []interface{}
+	_m.On("DeleteSeverityBucket", args...).Return(e.Returns.Err)
+}
+
+func (_m *MockOperation) ApplyDeleteSeverityBucketExpectations(expectations []OperationDeleteSeverityBucketExpectation) {
+	for _, e := range expectations {
+		_m.ApplyDeleteSeverityBucketExpectation(e)
+	}
+}
+
+// DeleteSeverityBucket provides a mock function with given fields:
+func (_m *MockOperation) DeleteSeverityBucket() error {
+	ret := _m.Called()
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 type OperationDeleteVulnerabilityDetailBucketReturns struct {
 	Err error
 }
@@ -124,14 +157,14 @@ func (_m *MockOperation) DeleteVulnerabilityDetailBucket() error {
 }
 
 type OperationForEachAdvisoryArgs struct {
-	Sources         []string
-	SourcesAnything bool
+	Source          string
+	SourceAnything  bool
 	PkgName         string
 	PkgNameAnything bool
 }
 
 type OperationForEachAdvisoryReturns struct {
-	Value map[string]Value
+	Value map[string][]byte
 	Err   error
 }
 
@@ -142,10 +175,10 @@ type OperationForEachAdvisoryExpectation struct {
 
 func (_m *MockOperation) ApplyForEachAdvisoryExpectation(e OperationForEachAdvisoryExpectation) {
 	var args []interface{}
-	if e.Args.SourcesAnything {
+	if e.Args.SourceAnything {
 		args = append(args, mock.Anything)
 	} else {
-		args = append(args, e.Args.Sources)
+		args = append(args, e.Args.Source)
 	}
 	if e.Args.PkgNameAnything {
 		args = append(args, mock.Anything)
@@ -161,22 +194,22 @@ func (_m *MockOperation) ApplyForEachAdvisoryExpectations(expectations []Operati
 	}
 }
 
-// ForEachAdvisory provides a mock function with given fields: sources, pkgName
-func (_m *MockOperation) ForEachAdvisory(sources []string, pkgName string) (map[string]Value, error) {
-	ret := _m.Called(sources, pkgName)
+// ForEachAdvisory provides a mock function with given fields: source, pkgName
+func (_m *MockOperation) ForEachAdvisory(source string, pkgName string) (map[string][]byte, error) {
+	ret := _m.Called(source, pkgName)
 
-	var r0 map[string]Value
-	if rf, ok := ret.Get(0).(func([]string, string) map[string]Value); ok {
-		r0 = rf(sources, pkgName)
+	var r0 map[string][]byte
+	if rf, ok := ret.Get(0).(func(string, string) map[string][]byte); ok {
+		r0 = rf(source, pkgName)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]Value)
+			r0 = ret.Get(0).(map[string][]byte)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func([]string, string) error); ok {
-		r1 = rf(sources, pkgName)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(source, pkgName)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -184,42 +217,42 @@ func (_m *MockOperation) ForEachAdvisory(sources []string, pkgName string) (map[
 	return r0, r1
 }
 
-type OperationForEachVulnerabilityIDArgs struct {
-	Fn         func(*bbolt.Tx, string) error
+type OperationForEachSeverityArgs struct {
+	Fn         func(*bbolt.Tx, string, types.Severity) error
 	FnAnything bool
 }
 
-type OperationForEachVulnerabilityIDReturns struct {
+type OperationForEachSeverityReturns struct {
 	Err error
 }
 
-type OperationForEachVulnerabilityIDExpectation struct {
-	Args    OperationForEachVulnerabilityIDArgs
-	Returns OperationForEachVulnerabilityIDReturns
+type OperationForEachSeverityExpectation struct {
+	Args    OperationForEachSeverityArgs
+	Returns OperationForEachSeverityReturns
 }
 
-func (_m *MockOperation) ApplyForEachVulnerabilityIDExpectation(e OperationForEachVulnerabilityIDExpectation) {
+func (_m *MockOperation) ApplyForEachSeverityExpectation(e OperationForEachSeverityExpectation) {
 	var args []interface{}
 	if e.Args.FnAnything {
 		args = append(args, mock.Anything)
 	} else {
 		args = append(args, e.Args.Fn)
 	}
-	_m.On("ForEachVulnerabilityID", args...).Return(e.Returns.Err)
+	_m.On("ForEachSeverity", args...).Return(e.Returns.Err)
 }
 
-func (_m *MockOperation) ApplyForEachVulnerabilityIDExpectations(expectations []OperationForEachVulnerabilityIDExpectation) {
+func (_m *MockOperation) ApplyForEachSeverityExpectations(expectations []OperationForEachSeverityExpectation) {
 	for _, e := range expectations {
-		_m.ApplyForEachVulnerabilityIDExpectation(e)
+		_m.ApplyForEachSeverityExpectation(e)
 	}
 }
 
-// ForEachVulnerabilityID provides a mock function with given fields: fn
-func (_m *MockOperation) ForEachVulnerabilityID(fn func(*bbolt.Tx, string) error) error {
+// ForEachSeverity provides a mock function with given fields: fn
+func (_m *MockOperation) ForEachSeverity(fn func(*bbolt.Tx, string, types.Severity) error) error {
 	ret := _m.Called(fn)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(func(*bbolt.Tx, string) error) error); ok {
+	if rf, ok := ret.Get(0).(func(func(*bbolt.Tx, string, types.Severity) error) error); ok {
 		r0 = rf(fn)
 	} else {
 		r0 = ret.Error(0)
@@ -289,6 +322,112 @@ func (_m *MockOperation) GetAdvisories(source string, pkgName string) ([]types.A
 	return r0, r1
 }
 
+type OperationGetAdvisoryDetailsArgs struct {
+	CveID         string
+	CveIDAnything bool
+}
+
+type OperationGetAdvisoryDetailsReturns struct {
+	Details []types.AdvisoryDetail
+	Err     error
+}
+
+type OperationGetAdvisoryDetailsExpectation struct {
+	Args    OperationGetAdvisoryDetailsArgs
+	Returns OperationGetAdvisoryDetailsReturns
+}
+
+func (_m *MockOperation) ApplyGetAdvisoryDetailsExpectation(e OperationGetAdvisoryDetailsExpectation) {
+	var args []interface{}
+	if e.Args.CveIDAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.CveID)
+	}
+	_m.On("GetAdvisoryDetails", args...).Return(e.Returns.Details, e.Returns.Err)
+}
+
+func (_m *MockOperation) ApplyGetAdvisoryDetailsExpectations(expectations []OperationGetAdvisoryDetailsExpectation) {
+	for _, e := range expectations {
+		_m.ApplyGetAdvisoryDetailsExpectation(e)
+	}
+}
+
+// GetAdvisoryDetails provides a mock function with given fields: cveID
+func (_m *MockOperation) GetAdvisoryDetails(cveID string) ([]types.AdvisoryDetail, error) {
+	ret := _m.Called(cveID)
+
+	var r0 []types.AdvisoryDetail
+	if rf, ok := ret.Get(0).(func(string) []types.AdvisoryDetail); ok {
+		r0 = rf(cveID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]types.AdvisoryDetail)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(cveID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+type OperationGetSeverityArgs struct {
+	VulnerabilityID         string
+	VulnerabilityIDAnything bool
+}
+
+type OperationGetSeverityReturns struct {
+	Severity types.Severity
+	Err      error
+}
+
+type OperationGetSeverityExpectation struct {
+	Args    OperationGetSeverityArgs
+	Returns OperationGetSeverityReturns
+}
+
+func (_m *MockOperation) ApplyGetSeverityExpectation(e OperationGetSeverityExpectation) {
+	var args []interface{}
+	if e.Args.VulnerabilityIDAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.VulnerabilityID)
+	}
+	_m.On("GetSeverity", args...).Return(e.Returns.Severity, e.Returns.Err)
+}
+
+func (_m *MockOperation) ApplyGetSeverityExpectations(expectations []OperationGetSeverityExpectation) {
+	for _, e := range expectations {
+		_m.ApplyGetSeverityExpectation(e)
+	}
+}
+
+// GetSeverity provides a mock function with given fields: vulnerabilityID
+func (_m *MockOperation) GetSeverity(vulnerabilityID string) (types.Severity, error) {
+	ret := _m.Called(vulnerabilityID)
+
+	var r0 types.Severity
+	if rf, ok := ret.Get(0).(func(string) types.Severity); ok {
+		r0 = rf(vulnerabilityID)
+	} else {
+		r0 = ret.Get(0).(types.Severity)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(vulnerabilityID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 type OperationGetVulnerabilityArgs struct {
 	VulnerabilityID         string
 	VulnerabilityIDAnything bool
@@ -347,7 +486,7 @@ type OperationGetVulnerabilityDetailArgs struct {
 }
 
 type OperationGetVulnerabilityDetailReturns struct {
-	Detail map[types.SourceID]types.VulnerabilityDetail
+	Detail map[string]types.VulnerabilityDetail
 	Err    error
 }
 
@@ -373,15 +512,15 @@ func (_m *MockOperation) ApplyGetVulnerabilityDetailExpectations(expectations []
 }
 
 // GetVulnerabilityDetail provides a mock function with given fields: cveID
-func (_m *MockOperation) GetVulnerabilityDetail(cveID string) (map[types.SourceID]types.VulnerabilityDetail, error) {
+func (_m *MockOperation) GetVulnerabilityDetail(cveID string) (map[string]types.VulnerabilityDetail, error) {
 	ret := _m.Called(cveID)
 
-	var r0 map[types.SourceID]types.VulnerabilityDetail
-	if rf, ok := ret.Get(0).(func(string) map[types.SourceID]types.VulnerabilityDetail); ok {
+	var r0 map[string]types.VulnerabilityDetail
+	if rf, ok := ret.Get(0).(func(string) map[string]types.VulnerabilityDetail); ok {
 		r0 = rf(cveID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[types.SourceID]types.VulnerabilityDetail)
+			r0 = ret.Get(0).(map[string]types.VulnerabilityDetail)
 		}
 	}
 
@@ -395,15 +534,87 @@ func (_m *MockOperation) GetVulnerabilityDetail(cveID string) (map[types.SourceI
 	return r0, r1
 }
 
+type OperationPutAdvisoryArgs struct {
+	Tx                      *bbolt.Tx
+	TxAnything              bool
+	Source                  string
+	SourceAnything          bool
+	PkgName                 string
+	PkgNameAnything         bool
+	VulnerabilityID         string
+	VulnerabilityIDAnything bool
+	Advisory                interface{}
+	AdvisoryAnything        bool
+}
+
+type OperationPutAdvisoryReturns struct {
+	Err error
+}
+
+type OperationPutAdvisoryExpectation struct {
+	Args    OperationPutAdvisoryArgs
+	Returns OperationPutAdvisoryReturns
+}
+
+func (_m *MockOperation) ApplyPutAdvisoryExpectation(e OperationPutAdvisoryExpectation) {
+	var args []interface{}
+	if e.Args.TxAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Tx)
+	}
+	if e.Args.SourceAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Source)
+	}
+	if e.Args.PkgNameAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.PkgName)
+	}
+	if e.Args.VulnerabilityIDAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.VulnerabilityID)
+	}
+	if e.Args.AdvisoryAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Advisory)
+	}
+	_m.On("PutAdvisory", args...).Return(e.Returns.Err)
+}
+
+func (_m *MockOperation) ApplyPutAdvisoryExpectations(expectations []OperationPutAdvisoryExpectation) {
+	for _, e := range expectations {
+		_m.ApplyPutAdvisoryExpectation(e)
+	}
+}
+
+// PutAdvisory provides a mock function with given fields: tx, source, pkgName, vulnerabilityID, advisory
+func (_m *MockOperation) PutAdvisory(tx *bbolt.Tx, source string, pkgName string, vulnerabilityID string, advisory interface{}) error {
+	ret := _m.Called(tx, source, pkgName, vulnerabilityID, advisory)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, string, string, interface{}) error); ok {
+		r0 = rf(tx, source, pkgName, vulnerabilityID, advisory)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 type OperationPutAdvisoryDetailArgs struct {
 	Tx                      *bbolt.Tx
 	TxAnything              bool
 	VulnerabilityID         string
 	VulnerabilityIDAnything bool
+	Source                  string
+	SourceAnything          bool
 	PkgName                 string
 	PkgNameAnything         bool
-	NestedBktNames          []string
-	NestedBktNamesAnything  bool
 	Advisory                interface{}
 	AdvisoryAnything        bool
 }
@@ -429,15 +640,15 @@ func (_m *MockOperation) ApplyPutAdvisoryDetailExpectation(e OperationPutAdvisor
 	} else {
 		args = append(args, e.Args.VulnerabilityID)
 	}
+	if e.Args.SourceAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Source)
+	}
 	if e.Args.PkgNameAnything {
 		args = append(args, mock.Anything)
 	} else {
 		args = append(args, e.Args.PkgName)
-	}
-	if e.Args.NestedBktNamesAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.NestedBktNames)
 	}
 	if e.Args.AdvisoryAnything {
 		args = append(args, mock.Anything)
@@ -453,13 +664,13 @@ func (_m *MockOperation) ApplyPutAdvisoryDetailExpectations(expectations []Opera
 	}
 }
 
-// PutAdvisoryDetail provides a mock function with given fields: tx, vulnerabilityID, pkgName, nestedBktNames, advisory
-func (_m *MockOperation) PutAdvisoryDetail(tx *bbolt.Tx, vulnerabilityID string, pkgName string, nestedBktNames []string, advisory interface{}) error {
-	ret := _m.Called(tx, vulnerabilityID, pkgName, nestedBktNames, advisory)
+// PutAdvisoryDetail provides a mock function with given fields: tx, vulnerabilityID, source, pkgName, advisory
+func (_m *MockOperation) PutAdvisoryDetail(tx *bbolt.Tx, vulnerabilityID string, source string, pkgName string, advisory interface{}) error {
+	ret := _m.Called(tx, vulnerabilityID, source, pkgName, advisory)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, string, []string, interface{}) error); ok {
-		r0 = rf(tx, vulnerabilityID, pkgName, nestedBktNames, advisory)
+	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, string, string, interface{}) error); ok {
+		r0 = rf(tx, vulnerabilityID, source, pkgName, advisory)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -467,231 +678,57 @@ func (_m *MockOperation) PutAdvisoryDetail(tx *bbolt.Tx, vulnerabilityID string,
 	return r0
 }
 
-type OperationPutDataSourceArgs struct {
-	Tx              *bbolt.Tx
-	TxAnything      bool
-	BktName         string
-	BktNameAnything bool
-	Source          types.DataSource
-	SourceAnything  bool
+type OperationPutSeverityArgs struct {
+	Tx                      *bbolt.Tx
+	TxAnything              bool
+	VulnerabilityID         string
+	VulnerabilityIDAnything bool
+	Severity                types.Severity
+	SeverityAnything        bool
 }
 
-type OperationPutDataSourceReturns struct {
+type OperationPutSeverityReturns struct {
 	Err error
 }
 
-type OperationPutDataSourceExpectation struct {
-	Args    OperationPutDataSourceArgs
-	Returns OperationPutDataSourceReturns
+type OperationPutSeverityExpectation struct {
+	Args    OperationPutSeverityArgs
+	Returns OperationPutSeverityReturns
 }
 
-func (_m *MockOperation) ApplyPutDataSourceExpectation(e OperationPutDataSourceExpectation) {
+func (_m *MockOperation) ApplyPutSeverityExpectation(e OperationPutSeverityExpectation) {
 	var args []interface{}
 	if e.Args.TxAnything {
 		args = append(args, mock.Anything)
 	} else {
 		args = append(args, e.Args.Tx)
 	}
-	if e.Args.BktNameAnything {
+	if e.Args.VulnerabilityIDAnything {
 		args = append(args, mock.Anything)
 	} else {
-		args = append(args, e.Args.BktName)
+		args = append(args, e.Args.VulnerabilityID)
 	}
-	if e.Args.SourceAnything {
+	if e.Args.SeverityAnything {
 		args = append(args, mock.Anything)
 	} else {
-		args = append(args, e.Args.Source)
+		args = append(args, e.Args.Severity)
 	}
-	_m.On("PutDataSource", args...).Return(e.Returns.Err)
+	_m.On("PutSeverity", args...).Return(e.Returns.Err)
 }
 
-func (_m *MockOperation) ApplyPutDataSourceExpectations(expectations []OperationPutDataSourceExpectation) {
+func (_m *MockOperation) ApplyPutSeverityExpectations(expectations []OperationPutSeverityExpectation) {
 	for _, e := range expectations {
-		_m.ApplyPutDataSourceExpectation(e)
+		_m.ApplyPutSeverityExpectation(e)
 	}
 }
 
-// PutDataSource provides a mock function with given fields: tx, bktName, source
-func (_m *MockOperation) PutDataSource(tx *bbolt.Tx, bktName string, source types.DataSource) error {
-	ret := _m.Called(tx, bktName, source)
+// PutSeverity provides a mock function with given fields: tx, vulnerabilityID, severity
+func (_m *MockOperation) PutSeverity(tx *bbolt.Tx, vulnerabilityID string, severity types.Severity) error {
+	ret := _m.Called(tx, vulnerabilityID, severity)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, types.DataSource) error); ok {
-		r0 = rf(tx, bktName, source)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-type OperationPutRedHatCPEsArgs struct {
-	Tx               *bbolt.Tx
-	TxAnything       bool
-	CpeIndex         int
-	CpeIndexAnything bool
-	Cpe              string
-	CpeAnything      bool
-}
-
-type OperationPutRedHatCPEsReturns struct {
-	Err error
-}
-
-type OperationPutRedHatCPEsExpectation struct {
-	Args    OperationPutRedHatCPEsArgs
-	Returns OperationPutRedHatCPEsReturns
-}
-
-func (_m *MockOperation) ApplyPutRedHatCPEsExpectation(e OperationPutRedHatCPEsExpectation) {
-	var args []interface{}
-	if e.Args.TxAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Tx)
-	}
-	if e.Args.CpeIndexAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.CpeIndex)
-	}
-	if e.Args.CpeAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Cpe)
-	}
-	_m.On("PutRedHatCPEs", args...).Return(e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyPutRedHatCPEsExpectations(expectations []OperationPutRedHatCPEsExpectation) {
-	for _, e := range expectations {
-		_m.ApplyPutRedHatCPEsExpectation(e)
-	}
-}
-
-// PutRedHatCPEs provides a mock function with given fields: tx, cpeIndex, cpe
-func (_m *MockOperation) PutRedHatCPEs(tx *bbolt.Tx, cpeIndex int, cpe string) error {
-	ret := _m.Called(tx, cpeIndex, cpe)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, int, string) error); ok {
-		r0 = rf(tx, cpeIndex, cpe)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-type OperationPutRedHatNVRsArgs struct {
-	Tx                 *bbolt.Tx
-	TxAnything         bool
-	Nvr                string
-	NvrAnything        bool
-	CpeIndices         []int
-	CpeIndicesAnything bool
-}
-
-type OperationPutRedHatNVRsReturns struct {
-	Err error
-}
-
-type OperationPutRedHatNVRsExpectation struct {
-	Args    OperationPutRedHatNVRsArgs
-	Returns OperationPutRedHatNVRsReturns
-}
-
-func (_m *MockOperation) ApplyPutRedHatNVRsExpectation(e OperationPutRedHatNVRsExpectation) {
-	var args []interface{}
-	if e.Args.TxAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Tx)
-	}
-	if e.Args.NvrAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Nvr)
-	}
-	if e.Args.CpeIndicesAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.CpeIndices)
-	}
-	_m.On("PutRedHatNVRs", args...).Return(e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyPutRedHatNVRsExpectations(expectations []OperationPutRedHatNVRsExpectation) {
-	for _, e := range expectations {
-		_m.ApplyPutRedHatNVRsExpectation(e)
-	}
-}
-
-// PutRedHatNVRs provides a mock function with given fields: tx, nvr, cpeIndices
-func (_m *MockOperation) PutRedHatNVRs(tx *bbolt.Tx, nvr string, cpeIndices []int) error {
-	ret := _m.Called(tx, nvr, cpeIndices)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, []int) error); ok {
-		r0 = rf(tx, nvr, cpeIndices)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-type OperationPutRedHatRepositoriesArgs struct {
-	Tx                 *bbolt.Tx
-	TxAnything         bool
-	Repository         string
-	RepositoryAnything bool
-	CpeIndices         []int
-	CpeIndicesAnything bool
-}
-
-type OperationPutRedHatRepositoriesReturns struct {
-	Err error
-}
-
-type OperationPutRedHatRepositoriesExpectation struct {
-	Args    OperationPutRedHatRepositoriesArgs
-	Returns OperationPutRedHatRepositoriesReturns
-}
-
-func (_m *MockOperation) ApplyPutRedHatRepositoriesExpectation(e OperationPutRedHatRepositoriesExpectation) {
-	var args []interface{}
-	if e.Args.TxAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Tx)
-	}
-	if e.Args.RepositoryAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Repository)
-	}
-	if e.Args.CpeIndicesAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.CpeIndices)
-	}
-	_m.On("PutRedHatRepositories", args...).Return(e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyPutRedHatRepositoriesExpectations(expectations []OperationPutRedHatRepositoriesExpectation) {
-	for _, e := range expectations {
-		_m.ApplyPutRedHatRepositoriesExpectation(e)
-	}
-}
-
-// PutRedHatRepositories provides a mock function with given fields: tx, repository, cpeIndices
-func (_m *MockOperation) PutRedHatRepositories(tx *bbolt.Tx, repository string, cpeIndices []int) error {
-	ret := _m.Called(tx, repository, cpeIndices)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, []int) error); ok {
-		r0 = rf(tx, repository, cpeIndices)
+	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, types.Severity) error); ok {
+		r0 = rf(tx, vulnerabilityID, severity)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -762,7 +799,7 @@ type OperationPutVulnerabilityDetailArgs struct {
 	TxAnything              bool
 	VulnerabilityID         string
 	VulnerabilityIDAnything bool
-	Source                  types.SourceID
+	Source                  string
 	SourceAnything          bool
 	Vulnerability           types.VulnerabilityDetail
 	VulnerabilityAnything   bool
@@ -809,222 +846,12 @@ func (_m *MockOperation) ApplyPutVulnerabilityDetailExpectations(expectations []
 }
 
 // PutVulnerabilityDetail provides a mock function with given fields: tx, vulnerabilityID, source, vulnerability
-func (_m *MockOperation) PutVulnerabilityDetail(tx *bbolt.Tx, vulnerabilityID string, source types.SourceID, vulnerability types.VulnerabilityDetail) error {
+func (_m *MockOperation) PutVulnerabilityDetail(tx *bbolt.Tx, vulnerabilityID string, source string, vulnerability types.VulnerabilityDetail) error {
 	ret := _m.Called(tx, vulnerabilityID, source, vulnerability)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, types.SourceID, types.VulnerabilityDetail) error); ok {
+	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string, string, types.VulnerabilityDetail) error); ok {
 		r0 = rf(tx, vulnerabilityID, source, vulnerability)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-type OperationPutVulnerabilityIDArgs struct {
-	Tx                      *bbolt.Tx
-	TxAnything              bool
-	VulnerabilityID         string
-	VulnerabilityIDAnything bool
-}
-
-type OperationPutVulnerabilityIDReturns struct {
-	Err error
-}
-
-type OperationPutVulnerabilityIDExpectation struct {
-	Args    OperationPutVulnerabilityIDArgs
-	Returns OperationPutVulnerabilityIDReturns
-}
-
-func (_m *MockOperation) ApplyPutVulnerabilityIDExpectation(e OperationPutVulnerabilityIDExpectation) {
-	var args []interface{}
-	if e.Args.TxAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Tx)
-	}
-	if e.Args.VulnerabilityIDAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.VulnerabilityID)
-	}
-	_m.On("PutVulnerabilityID", args...).Return(e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyPutVulnerabilityIDExpectations(expectations []OperationPutVulnerabilityIDExpectation) {
-	for _, e := range expectations {
-		_m.ApplyPutVulnerabilityIDExpectation(e)
-	}
-}
-
-// PutVulnerabilityID provides a mock function with given fields: tx, vulnerabilityID
-func (_m *MockOperation) PutVulnerabilityID(tx *bbolt.Tx, vulnerabilityID string) error {
-	ret := _m.Called(tx, vulnerabilityID)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string) error); ok {
-		r0 = rf(tx, vulnerabilityID)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-type OperationRedHatNVRToCPEsArgs struct {
-	Nvr         string
-	NvrAnything bool
-}
-
-type OperationRedHatNVRToCPEsReturns struct {
-	CpeIndices []int
-	Err        error
-}
-
-type OperationRedHatNVRToCPEsExpectation struct {
-	Args    OperationRedHatNVRToCPEsArgs
-	Returns OperationRedHatNVRToCPEsReturns
-}
-
-func (_m *MockOperation) ApplyRedHatNVRToCPEsExpectation(e OperationRedHatNVRToCPEsExpectation) {
-	var args []interface{}
-	if e.Args.NvrAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Nvr)
-	}
-	_m.On("RedHatNVRToCPEs", args...).Return(e.Returns.CpeIndices, e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyRedHatNVRToCPEsExpectations(expectations []OperationRedHatNVRToCPEsExpectation) {
-	for _, e := range expectations {
-		_m.ApplyRedHatNVRToCPEsExpectation(e)
-	}
-}
-
-// RedHatNVRToCPEs provides a mock function with given fields: nvr
-func (_m *MockOperation) RedHatNVRToCPEs(nvr string) ([]int, error) {
-	ret := _m.Called(nvr)
-
-	var r0 []int
-	if rf, ok := ret.Get(0).(func(string) []int); ok {
-		r0 = rf(nvr)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]int)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(nvr)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-type OperationRedHatRepoToCPEsArgs struct {
-	Repository         string
-	RepositoryAnything bool
-}
-
-type OperationRedHatRepoToCPEsReturns struct {
-	CpeIndices []int
-	Err        error
-}
-
-type OperationRedHatRepoToCPEsExpectation struct {
-	Args    OperationRedHatRepoToCPEsArgs
-	Returns OperationRedHatRepoToCPEsReturns
-}
-
-func (_m *MockOperation) ApplyRedHatRepoToCPEsExpectation(e OperationRedHatRepoToCPEsExpectation) {
-	var args []interface{}
-	if e.Args.RepositoryAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Repository)
-	}
-	_m.On("RedHatRepoToCPEs", args...).Return(e.Returns.CpeIndices, e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplyRedHatRepoToCPEsExpectations(expectations []OperationRedHatRepoToCPEsExpectation) {
-	for _, e := range expectations {
-		_m.ApplyRedHatRepoToCPEsExpectation(e)
-	}
-}
-
-// RedHatRepoToCPEs provides a mock function with given fields: repository
-func (_m *MockOperation) RedHatRepoToCPEs(repository string) ([]int, error) {
-	ret := _m.Called(repository)
-
-	var r0 []int
-	if rf, ok := ret.Get(0).(func(string) []int); ok {
-		r0 = rf(repository)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]int)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(repository)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-type OperationSaveAdvisoryDetailsArgs struct {
-	Tx            *bbolt.Tx
-	TxAnything    bool
-	CveID         string
-	CveIDAnything bool
-}
-
-type OperationSaveAdvisoryDetailsReturns struct {
-	Err error
-}
-
-type OperationSaveAdvisoryDetailsExpectation struct {
-	Args    OperationSaveAdvisoryDetailsArgs
-	Returns OperationSaveAdvisoryDetailsReturns
-}
-
-func (_m *MockOperation) ApplySaveAdvisoryDetailsExpectation(e OperationSaveAdvisoryDetailsExpectation) {
-	var args []interface{}
-	if e.Args.TxAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.Tx)
-	}
-	if e.Args.CveIDAnything {
-		args = append(args, mock.Anything)
-	} else {
-		args = append(args, e.Args.CveID)
-	}
-	_m.On("SaveAdvisoryDetails", args...).Return(e.Returns.Err)
-}
-
-func (_m *MockOperation) ApplySaveAdvisoryDetailsExpectations(expectations []OperationSaveAdvisoryDetailsExpectation) {
-	for _, e := range expectations {
-		_m.ApplySaveAdvisoryDetailsExpectation(e)
-	}
-}
-
-// SaveAdvisoryDetails provides a mock function with given fields: tx, cveID
-func (_m *MockOperation) SaveAdvisoryDetails(tx *bbolt.Tx, cveID string) error {
-	ret := _m.Called(tx, cveID)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*bbolt.Tx, string) error); ok {
-		r0 = rf(tx, cveID)
 	} else {
 		r0 = ret.Error(0)
 	}

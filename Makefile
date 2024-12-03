@@ -6,14 +6,14 @@ GOBIN=$(GOPATH)/bin
 u := $(if $(update),-u)
 
 $(GOBIN)/wire:
-	go install github.com/google/wire/cmd/wire@v0.5.0
+	GO111MODULE=off go get github.com/google/wire/cmd/wire
 
 .PHONY: wire
 wire: $(GOBIN)/wire
 	wire gen ./...
 
 $(GOBIN)/mockery:
-	go install github.com/knqyf263/mockery/cmd/mockery@latest
+	GO111MODULE=off go get -u github.com/khulnasoft-lab/mockery/...
 
 .PHONY: mock
 mock: $(GOBIN)/mockery
@@ -25,7 +25,7 @@ deps:
 	go mod tidy
 
 $(GOBIN)/golangci-lint:
-	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v1.41.0
+	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(GOBIN) v1.21.0
 
 .PHONY: test
 test:
@@ -44,45 +44,66 @@ clean:
 	rm -rf integration/testdata/fixtures/
 
 $(GOBIN)/bbolt:
-	go install go.etcd.io/bbolt/cmd/bbolt@v1.3.5
+	go get -v go.etcd.io/bbolt/...
+
+export DB_TYPE ?= tunnel
+
+ifeq ($(DB_TYPE),tunnel-light)
+	DB_ARG := --light
+endif
 
 tunnel-db:
 	make build
 
 .PHONY: db-all
 db-all:
-	make build db-fetch-langs db-fetch-vuln-list
+	make build db-fetch-langs db-fetch-vuln-list-main
 	make db-build
 	make db-compact
 	make db-compress
 
 .PHONY: db-fetch-langs
 db-fetch-langs:
-	mkdir -p cache/ruby-advisory-db cache/php-security-advisories cache/nodejs-security-wg
+	mkdir -p cache/ruby-advisory-db cache/rust-advisory-db cache/php-security-advisories cache/nodejs-security-wg cache/python-safety-db
 	wget -qO - https://github.com/rubysec/ruby-advisory-db/archive/master.tar.gz | tar xz -C cache/ruby-advisory-db --strip-components=1
+	wget -qO - https://github.com/RustSec/advisory-db/archive/master.tar.gz | tar xz -C cache/rust-advisory-db --strip-components=1
 	wget -qO - https://github.com/FriendsOfPHP/security-advisories/archive/master.tar.gz | tar xz -C cache/php-security-advisories --strip-components=1
 	wget -qO - https://github.com/nodejs/security-wg/archive/main.tar.gz | tar xz -C cache/nodejs-security-wg --strip-components=1
+	wget -qO - https://github.com/pyupio/safety-db/archive/master.tar.gz | tar xz -C cache/python-safety-db --strip-components=1
 
 .PHONY: db-build
 db-build: tunnel-db
-	./tunnel-db build --cache-dir cache --update-interval 6h
+	./tunnel-db build $(DB_ARG) --cache-dir cache --update-interval 6h
 
 .PHONY: db-compact
 db-compact: $(GOBIN)/bbolt cache/db/tunnel.db
-	mkdir -p assets/
-	$(GOBIN)/bbolt compact -o ./assets/tunnel.db cache/db/tunnel.db
-	cp cache/db/metadata.json ./assets/metadata.json
-	rm -rf cache/db
+	mkdir -p assets/$(DB_TYPE)
+	$(GOBIN)/bbolt compact -o ./assets/$(DB_TYPE)/$(DB_TYPE).db cache/db/tunnel.db
+	cp cache/db/metadata.json ./assets/$(DB_TYPE)/metadata.json
+	rm cache/db/tunnel.db
 
 .PHONY: db-compress
-db-compress: assets/tunnel.db assets/metadata.json
-	tar cvzf assets/db.tar.gz -C assets/ tunnel.db metadata.json
+db-compress: assets/$(DB_TYPE)/$(DB_TYPE).db assets/$(DB_TYPE)/metadata.json
+	tar cvzf assets/$(DB_TYPE)-offline.db.tgz -C assets/$(DB_TYPE) $(DB_TYPE).db metadata.json
+	gzip --best -c assets/$(DB_TYPE)/$(DB_TYPE).db > assets/$(DB_TYPE).db.gz
 
 .PHONY: db-clean
 db-clean:
 	rm -rf cache assets
 
-.PHONY: db-fetch-vuln-list
-db-fetch-vuln-list:
+.PHONY: db-fetch-vuln-list-main
+db-fetch-vuln-list-main:
 	mkdir -p cache/vuln-list
 	wget -qO - https://github.com/khulnasoft-lab/vuln-list/archive/main.tar.gz | tar xz -C cache/vuln-list --strip-components=1
+
+.PHONY: db-fetch-vuln-list-fixed
+db-fetch-vuln-list-fixed:
+	mkdir -p cache/vuln-list
+	wget -qO - https://github.com/aquasecurity/vuln-list/archive/8f40e0ae016df0be4148b1b5936ade4aab06a5bc.tar.gz | tar xz -C cache/vuln-list --strip-components=1
+
+.PHONY: create-test-db
+create-test-db: tunnel-db
+	make db-fetch-langs db-fetch-vuln-list-fixed
+	make db-build
+	make db-compact
+	make db-compress

@@ -1,70 +1,65 @@
-package bundler_test
+package bundler
 
 import (
-	"path/filepath"
+	"os"
 	"testing"
 
+	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/bundler"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrctest"
+	"github.com/stretchr/testify/require"
+	bolt "go.etcd.io/bbolt"
 )
 
-func TestVulnSrc_Update(t *testing.T) {
-	tests := []struct {
-		name       string
-		dir        string
-		wantValues []vulnsrctest.WantValues
-		wantErr    string
-	}{
+func Test_walkFunc(t *testing.T) {
+	mockDBConfig := new(db.MockOperation)
+	mockDBConfig.ApplyPutAdvisoryDetailExpectations([]db.OperationPutAdvisoryDetailExpectation{
 		{
-			name: "happy path",
-			dir:  filepath.Join("testdata", "happy"),
-			wantValues: []vulnsrctest.WantValues{
-				{
-					Key: []string{"data-source", "rubygems::Ruby Advisory Database"},
-					Value: types.DataSource{
-						ID:   vulnerability.RubySec,
-						Name: "Ruby Advisory Database",
-						URL:  "https://github.com/rubysec/ruby-advisory-db",
-					},
-				},
-				{
-					Key: []string{"advisory-detail", "CVE-2019-9837", "rubygems::Ruby Advisory Database", "doorkeeper-openid_connect"},
-					Value: types.Advisory{
-						PatchedVersions:    []string{">= 1.5.4"},
-						UnaffectedVersions: []string{"< 1.4.0"},
-					},
-				},
-				{
-					Key: []string{"vulnerability-detail", "CVE-2019-9837", string(vulnerability.RubySec)},
-					Value: types.VulnerabilityDetail{
-						CvssScoreV3: 6.1,
-						References:  []string{"https://github.com/doorkeeper-gem/doorkeeper-openid_connect/blob/master/CHANGELOG.md#v154-2019-02-15"},
-						Title:       "Doorkeeper::OpenidConnect Open Redirect",
-						Description: "Doorkeeper::OpenidConnect (aka the OpenID Connect extension for Doorkeeper) 1.4.x and 1.5.x before 1.5.4 has an open redirect via the redirect_uri field in an OAuth authorization request (that results in an error response) with the 'openid' scope and a prompt=none value. This allows phishing attacks against the authorization flow.",
-					},
-				},
-				{
-					Key:   []string{"vulnerability-id", "CVE-2019-9837"},
-					Value: map[string]interface{}{},
+			Args: db.OperationPutAdvisoryDetailArgs{
+				TxAnything:      true,
+				Source:          vulnerability.RubySec,
+				PkgName:         "doorkeeper-openid_connect",
+				VulnerabilityID: "CVE-2019-9837",
+				Advisory: Advisory{
+					//VulnerabilityID:    "CVE-2018-16487", // TODO: Why is this field needed if the key is already the same?
+					PatchedVersions:    []string{">= 1.5.4"},
+					UnaffectedVersions: []string{"< 1.4.0"},
 				},
 			},
 		},
+	})
+	mockDBConfig.ApplyPutVulnerabilityDetailExpectations([]db.OperationPutVulnerabilityDetailExpectation{
 		{
-			name:    "sad path",
-			dir:     filepath.Join("testdata", "sad"),
-			wantErr: "failed to unmarshal YAML",
+			Args: db.OperationPutVulnerabilityDetailArgs{
+				TxAnything:      true,
+				VulnerabilityID: "CVE-2019-9837",
+				Source:          vulnerability.RubySec,
+				Vulnerability: types.VulnerabilityDetail{
+					ID:          "CVE-2019-9837", // TODO: Why is this field needed if the key is already the same?
+					CvssScore:   0,
+					CvssScoreV3: 6.1,
+					References:  []string{"https://github.com/doorkeeper-gem/doorkeeper-openid_connect/blob/master/CHANGELOG.md#v154-2019-02-15"},
+					Title:       "Doorkeeper::OpenidConnect Open Redirect",
+					Description: "Doorkeeper::OpenidConnect (aka the OpenID Connect extension for Doorkeeper) 1.4.x and 1.5.x before 1.5.4 has an open redirect via the redirect_uri field in an OAuth authorization request (that results in an error response) with the 'openid' scope and a prompt=none value. This allows phishing attacks against the authorization flow.",
+				},
+			},
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			vs := bundler.NewVulnSrc()
-			vulnsrctest.TestUpdate(t, vs, vulnsrctest.TestUpdateArgs{
-				Dir:        tt.dir,
-				WantValues: tt.wantValues,
-				WantErr:    tt.wantErr,
-			})
-		})
-	}
+	})
+	mockDBConfig.ApplyPutSeverityExpectations([]db.OperationPutSeverityExpectation{
+		{
+			Args: db.OperationPutSeverityArgs{
+				TxAnything:      true,
+				VulnerabilityID: "CVE-2019-9837",
+				Severity:        0,
+			},
+		},
+	})
+
+	vs := VulnSrc{dbc: mockDBConfig}
+
+	filePath := "testdata/CVE-2019-9837.yml"
+	fi, err := os.Lstat(filePath)
+	require.NoError(t, err)
+
+	require.NoError(t, vs.walkFunc(err, fi, filePath, &bolt.Tx{}))
 }

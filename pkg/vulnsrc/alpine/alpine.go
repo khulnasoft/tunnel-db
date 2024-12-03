@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -21,12 +22,6 @@ const (
 
 var (
 	platformFormat = "alpine %s"
-
-	source = types.DataSource{
-		ID:   vulnerability.Alpine,
-		Name: "Alpine Secdb",
-		URL:  "https://secdb.alpinelinux.org/",
-	}
 )
 
 type VulnSrc struct {
@@ -39,8 +34,8 @@ func NewVulnSrc() VulnSrc {
 	}
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.Alpine
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -67,13 +62,10 @@ func (vs VulnSrc) Update(dir string) error {
 
 func (vs VulnSrc) save(advisories []advisory) error {
 	err := vs.dbc.BatchUpdate(func(tx *bolt.Tx) error {
-		for _, adv := range advisories {
-			version := strings.TrimPrefix(adv.Distroversion, "v")
+		for _, advisory := range advisories {
+			version := strings.TrimPrefix(advisory.Distroversion, "v")
 			platformName := fmt.Sprintf(platformFormat, version)
-			if err := vs.dbc.PutDataSource(tx, platformName, source); err != nil {
-				return xerrors.Errorf("failed to put data source: %w", err)
-			}
-			if err := vs.saveSecFixes(tx, platformName, adv.PkgName, adv.Secfixes); err != nil {
+			if err := vs.saveSecFixes(tx, platformName, advisory.PkgName, advisory.Secfixes); err != nil {
 				return err
 			}
 		}
@@ -99,13 +91,13 @@ func (vs VulnSrc) saveSecFixes(tx *bolt.Tx, platform, pkgName string, secfixes m
 				if !strings.HasPrefix(cveID, "CVE-") {
 					continue
 				}
-				if err := vs.dbc.PutAdvisoryDetail(tx, cveID, pkgName, []string{platform}, advisory); err != nil {
+				if err := vs.dbc.PutAdvisoryDetail(tx, cveID, platform, pkgName, advisory); err != nil {
 					return xerrors.Errorf("failed to save Alpine advisory: %w", err)
 				}
 
-				// for optimization
-				if err := vs.dbc.PutVulnerabilityID(tx, cveID); err != nil {
-					return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+				// for light DB
+				if err := vs.dbc.PutSeverity(tx, cveID, types.SeverityUnknown); err != nil {
+					return xerrors.Errorf("failed to save Alpine vulnerability severity: %w", err)
 				}
 			}
 		}

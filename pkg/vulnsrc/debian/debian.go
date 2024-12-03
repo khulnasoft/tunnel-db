@@ -7,20 +7,19 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
-	debver "github.com/knqyf263/go-deb-version"
+	version "github.com/knqyf263/go-deb-version"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
 
 const (
-	debianDir = "vuln-list-debian"
+	debianDir = "debian"
 
 	// Type
 	packageType = "package"
@@ -34,23 +33,20 @@ const (
 	dlaDir            = "DLA"
 	dsaDir            = "DSA"
 
+	// This bucket stores unfixed vulnerabilities only.
 	// e.g. debian 8
 	platformFormat = "debian %s"
+
+	// The security advisories are not from OVAL, but we have to keep this bucket for backward compatibility.
+	// This bucket stores fixed vulnerabilities only.
+	// e.g. debian oval 8
+	ovalPlatformFormat = "debian oval %s"
 )
 
 var (
 	// NOTE: "removed" should not be marked as "not-affected".
 	// ref. https://security-team.debian.org/security_tracker.html#removed-packages
-	skipStatuses = []string{
-		"not-affected",
-		"undetermined",
-	}
-
-	source = types.DataSource{
-		ID:   vulnerability.Debian,
-		Name: "Debian Security Tracker",
-		URL:  "https://salsa.debian.org/security-tracker-team/security-tracker",
-	}
+	skipStatuses = []string{"not-affected", "undetermined"}
 )
 
 type Option func(src *VulnSrc)
@@ -68,10 +64,6 @@ type VulnSrc struct {
 	// Hold a map of codenames and major versions from distributions.json
 	// e.g. "buster" => "10"
 	distributions map[string]string
-
-	// Hold vulnerability details per vulnerability id
-	// e.g. {"CVE-2021-33560": "Libgcrypt before 1.8.8 and 1.9.x before 1.9.3 mishandles ElGamal encry ..."}
-	details map[string]VulnerabilityDetail
 
 	// Hold the latest versions of each codename in Sources.json
 	// e.g. {"buster", "bash"} => "5.0-4"
@@ -96,7 +88,6 @@ func NewVulnSrc(opts ...Option) VulnSrc {
 		put:              defaultPut,
 		dbc:              db.Config{},
 		distributions:    map[string]string{},
-		details:          map[string]VulnerabilityDetail{},
 		pkgVersions:      map[bucket]string{},
 		sidFixedVersions: map[bucket]string{},
 		bktAdvisories:    map[bucket]Advisory{},
@@ -110,8 +101,8 @@ func NewVulnSrc(opts ...Option) VulnSrc {
 	return src
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.Debian
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -127,7 +118,7 @@ func (vs VulnSrc) Update(dir string) error {
 }
 
 func (vs VulnSrc) parse(dir string) error {
-	rootDir := filepath.Join(dir, debianDir, "tracker")
+	rootDir := filepath.Join(dir, "vuln-list", debianDir)
 
 	// Parse distributions.json
 	if err := vs.parseDistributions(rootDir); err != nil {
@@ -187,9 +178,6 @@ func (vs VulnSrc) parseCVE(dir string) error {
 		// Hold severities per the packages
 		severities := map[string]string{}
 		cveID := bug.Header.ID
-		vs.details[cveID] = VulnerabilityDetail{
-			Description: strings.Trim(bug.Header.Description, "()"),
-		}
 
 		for _, ann := range bug.Annotations {
 			if ann.Type != packageType {
@@ -203,7 +191,7 @@ func (vs VulnSrc) parseCVE(dir string) error {
 			}
 
 			// Skip not-affected, removed or undetermined advisories
-			if slices.Contains(skipStatuses, ann.Kind) {
+			if utils.StringInSlice(ann.Kind, skipStatuses) {
 				vs.notAffected[bkt] = struct{}{}
 				continue
 			}
@@ -224,27 +212,15 @@ func (vs VulnSrc) parseCVE(dir string) error {
 				continue
 			}
 
-			fixedVersion := ann.Version
-			kind := ann.Kind
-			if latestVersion, ok := vs.pkgVersions[bucket{codeName: ann.Release, pkgName: ann.Package}]; ok {
-				// If the fixed version has not yet been released, then set the state to "unfixed".
-				if comp, err := compareVersions(latestVersion, fixedVersion); err == nil && comp < 0 {
-					fixedVersion = ""
-					if kind == "fixed" {
-						kind = "unfixed"
-					}
-				}
-			}
-
 			advisory := Advisory{
-				FixedVersion: fixedVersion, // It might be empty because of no-dsa.
+				FixedVersion: ann.Version, // It might be empty because of no-dsa.
 				Severity:     severities[ann.Package],
 			}
 
-			if fixedVersion == "" {
+			if ann.Version == "" {
 				// Populate State only when FixedVersion is empty.
 				// e.g. no-dsa
-				advisory.State = kind
+				advisory.State = ann.Kind
 			}
 
 			// This advisory might be overwritten by DLA/DSA.
@@ -279,10 +255,6 @@ func (vs VulnSrc) parseAdvisory(dir string) error {
 	return vs.parseBug(dir, func(bug bug) error {
 		var cveIDs []string
 		advisoryID := bug.Header.ID
-		vs.details[advisoryID] = VulnerabilityDetail{
-			Description: strings.Trim(bug.Header.Description, "()"),
-		}
-
 		for _, ann := range bug.Annotations {
 			// DLA/DSA is associated with CVE-IDs
 			// e.g. "DSA-4931-1" => "{CVE-2021-0089 CVE-2021-26313 CVE-2021-28690 CVE-2021-28692}"
@@ -309,7 +281,7 @@ func (vs VulnSrc) parseAdvisory(dir string) error {
 				}
 
 				// Skip not-affected, removed or undetermined advisories
-				if slices.Contains(skipStatuses, ann.Kind) {
+				if utils.StringInSlice(ann.Kind, skipStatuses) {
 					vs.notAffected[bkt] = struct{}{}
 					continue
 				}
@@ -326,7 +298,7 @@ func (vs VulnSrc) parseAdvisory(dir string) error {
 					// Replace the fixed version with the newer version.
 					if res > 0 {
 						adv.FixedVersion = ann.Version
-						adv.State = "" // State should be empty because this advisory has fixed version, actually.
+						adv.State = "" // State should be empty because this advisory has fixed version actually.
 					}
 					adv.VendorIDs = append(adv.VendorIDs, advisoryID)
 				} else {
@@ -363,10 +335,7 @@ func (vs VulnSrc) commit(tx *bolt.Tx) error {
 		cveID := sidBkt.vulnID
 
 		// Skip if the advisory is stated as "not-affected" for all distributions.
-		if _, ok := vs.notAffected[bucket{
-			pkgName: pkgName,
-			vulnID:  cveID,
-		}]; ok {
+		if _, ok := vs.notAffected[bucket{pkgName: pkgName, vulnID: cveID}]; ok {
 			continue
 		}
 
@@ -447,11 +416,22 @@ func (vs VulnSrc) putAdvisory(tx *bolt.Tx, bkt bucket, advisory Advisory) error 
 		return nil
 	}
 
+	var platform string
+	if advisory.FixedVersion == "" {
+		// Convert major version to bucket name for unfixed vulnerabilities
+		// e.g. "10" => "debian 10"
+		platform = fmt.Sprintf(platformFormat, majorVersion)
+
+	} else {
+		// Convert major version to bucket name for fixed vulnerabilities
+		// e.g. "10" => "debian oval 10"
+		platform = fmt.Sprintf(ovalPlatformFormat, majorVersion)
+	}
+
 	// Fill information for the buckets.
 	advisory.VulnerabilityID = bkt.vulnID
 	advisory.PkgName = bkt.pkgName
-	advisory.Platform = fmt.Sprintf(platformFormat, majorVersion)
-	advisory.Title = vs.details[bkt.vulnID].Description // The Debian description is short, so we'll use it as a title.
+	advisory.Platform = platform
 
 	if err := vs.put(vs.dbc, tx, advisory); err != nil {
 		return xerrors.Errorf("put error: %w", err)
@@ -469,42 +449,38 @@ func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 
 	detail := types.Advisory{
 		VendorIDs:    adv.VendorIDs,
-		Status:       newStatus(adv.State),
+		State:        adv.State,
 		Severity:     severityFromUrgency(adv.Severity),
 		FixedVersion: adv.FixedVersion,
 	}
 
-	if err := dbc.PutAdvisoryDetail(tx, adv.VulnerabilityID, adv.PkgName, []string{adv.Platform}, &detail); err != nil {
+	if err := dbc.PutAdvisoryDetail(tx, adv.VulnerabilityID, adv.Platform, adv.PkgName, detail); err != nil {
 		return xerrors.Errorf("failed to save Debian advisory: %w", err)
 	}
 
-	vuln := types.VulnerabilityDetail{
-		Title: adv.Title,
-	}
-	if err := dbc.PutVulnerabilityDetail(tx, adv.VulnerabilityID, source.ID, vuln); err != nil {
-		return xerrors.Errorf("failed to save Debian vulnerability detail: %w", err)
-	}
-
-	// for optimization
-	if err := dbc.PutVulnerabilityID(tx, adv.VulnerabilityID); err != nil {
-		return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
-	}
-
-	if err := dbc.PutDataSource(tx, adv.Platform, source); err != nil {
-		return xerrors.Errorf("failed to put data source: %w", err)
+	// for light DB
+	if err := dbc.PutSeverity(tx, adv.VulnerabilityID, types.SeverityUnknown); err != nil {
+		return xerrors.Errorf("failed to save Debian vulnerability severity: %w", err)
 	}
 
 	return nil
 }
 
 func (vs VulnSrc) Get(release string, pkgName string) ([]types.Advisory, error) {
+	// For unfixed vulnerabilities
 	bkt := fmt.Sprintf(platformFormat, release)
-	advisories, err := vs.dbc.GetAdvisories(bkt, pkgName)
+	unfixedAdvs, err := vs.dbc.GetAdvisories(bkt, pkgName)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get Debian advisories: %w", err)
 	}
 
-	return advisories, nil
+	// For fixed vulnerabilities
+	ovalBkt := fmt.Sprintf(ovalPlatformFormat, release)
+	fixedAdvs, err := vs.dbc.GetAdvisories(ovalBkt, pkgName)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get Debian OVAL advisories: %w", err)
+	}
+	return append(fixedAdvs, unfixedAdvs...), nil
 }
 
 func severityFromUrgency(urgency string) types.Severity {
@@ -561,39 +537,41 @@ func (vs VulnSrc) parseSources(dir string) error {
 		log.Printf("  Parsing %s sources...", code)
 		err := utils.FileWalk(codePath, func(r io.Reader, path string) error {
 			// To parse Sources.json
-			var pkg struct {
+			var pkgs []struct {
 				Package []string
 				Version []string
 			}
-			if err := json.NewDecoder(r).Decode(&pkg); err != nil {
+			if err := json.NewDecoder(r).Decode(&pkgs); err != nil {
 				return xerrors.Errorf("failed to decode %s: %w", path, err)
 			}
 
-			if len(pkg.Package) == 0 || len(pkg.Version) == 0 {
-				return nil
-			}
-
-			bkt := bucket{
-				codeName: code,
-				pkgName:  pkg.Package[0],
-			}
-
-			version := pkg.Version[0]
-
-			// Skip the update when the stored version is greater than the processing version.
-			if v, ok := vs.pkgVersions[bkt]; ok {
-				res, err := compareVersions(v, version)
-				if err != nil {
-					return xerrors.Errorf("version comparison error: %w", err)
+			for _, pkg := range pkgs {
+				if len(pkg.Package) == 0 || len(pkg.Version) == 0 {
+					continue
 				}
 
-				if res >= 0 {
-					return nil
+				bkt := bucket{
+					codeName: code,
+					pkgName:  pkg.Package[0],
 				}
-			}
 
-			// Store package name and version per codename
-			vs.pkgVersions[bkt] = version
+				version := pkg.Version[0]
+
+				// Skip the update when the stored version is greater than the processing version.
+				if v, ok := vs.pkgVersions[bkt]; ok {
+					res, err := compareVersions(v, version)
+					if err != nil {
+						return xerrors.Errorf("version comparison error: %w", err)
+					}
+
+					if res >= 0 {
+						continue
+					}
+				}
+
+				// Store package name and version per codename
+				vs.pkgVersions[bkt] = version
+			}
 
 			return nil
 		})
@@ -608,31 +586,28 @@ func (vs VulnSrc) parseSources(dir string) error {
 // There are 3 cases when the fixed version of each release is not stated in list files.
 //
 // Case 1
-//
-//	  When the latest version in the release is greater than the fixed version in sid,
-//	  we can assume that the vulnerability was already fixed at the fixed version.
-//	  e.g.
-//		latest version (buster) : "5.0-4"
-//	    fixed version (sid)     : "5.0-2"
-//	    => the vulnerability was fixed at "5.0-2".
+//   When the latest version in the release is greater than the fixed version in sid,
+//   we can assume that the vulnerability was already fixed at the fixed version.
+//   e.g.
+//	   latest version (buster) : "5.0-4"
+//     fixed version (sid)     : "5.0-2"
+//      => the vulnerability was fixed at "5.0-2".
 //
 // Case 2
-//
-//	  When the latest version in the release less than the fixed version in sid,
-//	  it means the vulnerability has not been fixed yet.
-//	  e.g.
-//		latest version (buster) : "5.0-4"
-//	    fixed version (sid)     : "5.0-5"
-//	     => the vulnerability hasn't been fixed yet.
+//   When the latest version in the release less than the fixed version in sid,
+//   it means the vulnerability has not been fixed yet.
+//   e.g.
+//	   latest version (buster) : "5.0-4"
+//     fixed version (sid)     : "5.0-5"
+//      => the vulnerability hasn't been fixed yet.
 //
 // Case 3
-//
-//	  When the fixed version in sid is empty,
-//	  it means the vulnerability has not been fixed yet.
-//	  e.g.
-//		   latest version (buster) : "5.0-4"
-//	    fixed version (sid)     : ""
-//	     => the vulnerability hasn't been fixed yet.
+//   When the fixed version in sid is empty,
+//   it means the vulnerability has not been fixed yet.
+//   e.g.
+//	   latest version (buster) : "5.0-4"
+//     fixed version (sid)     : ""
+//      => the vulnerability hasn't been fixed yet.
 func hasFixedVersion(sidVer, codeVer string) (bool, error) {
 	// No fixed version even in sid
 	if sidVer == "" {
@@ -659,31 +634,15 @@ func compareVersions(v1, v2 string) (int, error) {
 		return 1, nil
 	}
 
-	ver1, err := debver.NewVersion(v1)
+	ver1, err := version.NewVersion(v1)
 	if err != nil {
 		return 0, xerrors.Errorf("version error: %w", err)
 	}
 
-	ver2, err := debver.NewVersion(v2)
+	ver2, err := version.NewVersion(v2)
 	if err != nil {
 		return 0, xerrors.Errorf("version error: %w", err)
 	}
 
 	return ver1.Compare(ver2), nil
-}
-
-func newStatus(s string) types.Status {
-	switch strings.ToLower(s) {
-	// "end-of-life" is considered as vulnerable
-	// e.g. https://security-tracker.debian.org/tracker/CVE-2022-1488
-	case "no-dsa", "unfixed":
-		return types.StatusAffected
-	case "ignored":
-		return types.StatusWillNotFix
-	case "postponed":
-		return types.StatusFixDeferred
-	case "end-of-life":
-		return types.StatusEndOfLife
-	}
-	return types.StatusUnknown
 }

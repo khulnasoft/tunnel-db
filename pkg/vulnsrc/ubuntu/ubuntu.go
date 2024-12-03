@@ -6,14 +6,14 @@ import (
 	"io"
 	"log"
 	"path/filepath"
-	"slices"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
+
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"go.khulnasoft.com/tunnel-db/pkg/utils"
 	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -24,42 +24,26 @@ const (
 var (
 	targetStatuses        = []string{"needed", "deferred", "released"}
 	UbuntuReleasesMapping = map[string]string{
-		"precise":  "12.04",
-		"quantal":  "12.10",
-		"raring":   "13.04",
-		"saucy":    "13.10",
-		"trusty":   "14.04",
-		"utopic":   "14.10",
-		"vivid":    "15.04",
-		"wily":     "15.10",
-		"xenial":   "16.04",
-		"yakkety":  "16.10",
-		"zesty":    "17.04",
-		"artful":   "17.10",
-		"bionic":   "18.04",
-		"cosmic":   "18.10",
-		"disco":    "19.04",
-		"eoan":     "19.10",
-		"focal":    "20.04",
-		"groovy":   "20.10",
-		"hirsute":  "21.04",
-		"impish":   "21.10",
-		"jammy":    "22.04",
-		"kinetic":  "22.10",
-		"lunar":    "23.04",
-		"mantic":   "23.10",
-		"noble":    "24.04",
-		"oracular": "24.10",
-		// ESM versions:
-		"precise/esm":      "12.04-ESM",
-		"trusty/esm":       "14.04-ESM",
-		"esm-infra/xenial": "16.04-ESM",
-	}
-
-	source = types.DataSource{
-		ID:   vulnerability.Ubuntu,
-		Name: "Ubuntu CVE Tracker",
-		URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
+		"precise": "12.04",
+		"quantal": "12.10",
+		"raring":  "13.04",
+		"saucy":   "13.10",
+		"trusty":  "14.04",
+		"utopic":  "14.10",
+		"vivid":   "15.04",
+		"wily":    "15.10",
+		"xenial":  "16.04",
+		"yakkety": "16.10",
+		"zesty":   "17.04",
+		"artful":  "17.10",
+		"bionic":  "18.04",
+		"cosmic":  "18.10",
+		"disco":   "19.04",
+		"eoan":    "19.10",
+		"focal":   "20.04",
+		"groovy":  "20.10",
+		"hirsute": "21.04",
+		"impish":  "21.10",
 	}
 )
 
@@ -89,8 +73,8 @@ func NewVulnSrc(opts ...Option) VulnSrc {
 	return src
 }
 
-func (vs VulnSrc) Name() types.SourceID {
-	return source.ID
+func (vs VulnSrc) Name() string {
+	return vulnerability.Ubuntu
 }
 
 func (vs VulnSrc) Update(dir string) error {
@@ -157,7 +141,7 @@ func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 	for packageName, patch := range cve.Patches {
 		pkgName := string(packageName)
 		for release, status := range patch {
-			if !slices.Contains(targetStatuses, status.Status) {
+			if !utils.StringInSlice(status.Status, targetStatuses) {
 				continue
 			}
 			osVersion, ok := UbuntuReleasesMapping[string(release)]
@@ -165,15 +149,11 @@ func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 				continue
 			}
 			platformName := fmt.Sprintf(platformFormat, osVersion)
-			if err := dbc.PutDataSource(tx, platformName, source); err != nil {
-				return xerrors.Errorf("failed to put data source: %w", err)
-			}
-
 			adv := types.Advisory{}
 			if status.Status == "released" {
 				adv.FixedVersion = status.Note
 			}
-			if err := dbc.PutAdvisoryDetail(tx, cve.Candidate, pkgName, []string{platformName}, adv); err != nil {
+			if err := dbc.PutAdvisoryDetail(tx, cve.Candidate, platformName, pkgName, adv); err != nil {
 				return xerrors.Errorf("failed to save Ubuntu advisory: %w", err)
 			}
 
@@ -182,13 +162,13 @@ func defaultPut(dbc db.Operation, tx *bolt.Tx, advisory interface{}) error {
 				References:  cve.References,
 				Description: cve.Description,
 			}
-			if err := dbc.PutVulnerabilityDetail(tx, cve.Candidate, source.ID, vuln); err != nil {
+			if err := dbc.PutVulnerabilityDetail(tx, cve.Candidate, vulnerability.Ubuntu, vuln); err != nil {
 				return xerrors.Errorf("failed to save Ubuntu vulnerability: %w", err)
 			}
 
-			// for optimization
-			if err := dbc.PutVulnerabilityID(tx, cve.Candidate); err != nil {
-				return xerrors.Errorf("failed to save the vulnerability ID: %w", err)
+			// for light DB
+			if err := dbc.PutSeverity(tx, cve.Candidate, types.SeverityUnknown); err != nil {
+				return xerrors.Errorf("failed to save Ubuntu vulnerability severity: %w", err)
 			}
 		}
 	}
