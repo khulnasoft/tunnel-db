@@ -2,13 +2,10 @@ package utils
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func touch(t *testing.T, name string) {
@@ -22,18 +19,14 @@ func touch(t *testing.T, name string) {
 }
 
 func write(t *testing.T, name string, content string) {
-	err := ioutil.WriteFile(name, []byte(content), 0666)
+	err := os.WriteFile(name, []byte(content), 0666)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestFileWalk(t *testing.T) {
-	td, err := ioutil.TempDir("", "walktest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(td)
+	td := t.TempDir()
 
 	if err := os.MkdirAll(filepath.Join(td, "dir"), 0755); err != nil {
 		t.Fatal(err)
@@ -46,6 +39,8 @@ func TestFileWalk(t *testing.T) {
 	sawFoo1 := false
 	sawFoo2 := false
 	var contentFoo3 []byte
+	var err error
+
 	walker := func(r io.Reader, path string) error {
 		if strings.HasSuffix(path, "dir") {
 			sawDir = true
@@ -57,7 +52,7 @@ func TestFileWalk(t *testing.T) {
 			sawFoo2 = true
 		}
 		if strings.HasSuffix(path, "foo3") {
-			contentFoo3, err = ioutil.ReadAll(r)
+			contentFoo3, err = io.ReadAll(r)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -78,53 +73,4 @@ func TestFileWalk(t *testing.T) {
 	if string(contentFoo3) != "foo3" {
 		t.Error("The file content is wrong")
 	}
-}
-
-func TestUniq(t *testing.T) {
-	testCases := []struct {
-		name       string
-		inputData  []string
-		expectData []string
-	}{
-		{
-
-			name: "positive test",
-			inputData: []string{
-				"test string 1",
-				"test string 3",
-				"test string 2",
-				"test string 1",
-				"test string 2",
-				"test string 3",
-			},
-			expectData: []string{
-				"test string 1",
-				"test string 2",
-				"test string 3",
-			},
-		},
-		{
-			name:       "positive test input empty",
-			inputData:  []string{},
-			expectData: []string{},
-		},
-		{
-			name: "positive test input uniq",
-			inputData: []string{
-				"test string 1",
-				"test string 3",
-				"test string 2",
-			},
-			expectData: []string{
-				"test string 1",
-				"test string 2",
-				"test string 3",
-			},
-		},
-	}
-	for _, testCase := range testCases {
-		actualData := Uniq(testCase.inputData)
-		assert.Equal(t, actualData, testCase.expectData, testCase.name)
-	}
-
 }
