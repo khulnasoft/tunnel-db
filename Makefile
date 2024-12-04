@@ -76,6 +76,7 @@ db-fetch-langs:
 
 .PHONY: db-build
 db-build: tunnel-db
+	mkdir -p ./$(CACHE_DIR) ./$(OUT_DIR)
 	./tunnel-db build --cache-dir ./$(CACHE_DIR) --update-interval 24h
 
 .PHONY: db-compact
