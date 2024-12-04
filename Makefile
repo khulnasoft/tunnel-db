@@ -9,7 +9,7 @@ GOPATH=$(shell go env GOPATH)
 GOBIN=$(GOPATH)/bin
 
 ifndef REPO_OWNER
-    REPO_OWNER=khulnasoft-lab
+    REPO_OWNER=aquasecurity
 endif
 
 u := $(if $(update),-u)
@@ -76,8 +76,7 @@ db-fetch-langs:
 
 .PHONY: db-build
 db-build: tunnel-db
-	mkdir -p ./$(CACHE_DIR) ./$(OUT_DIR)
-	./tunnel-db build --cache-dir ./$(CACHE_DIR) --update-interval 24h
+	./tunnel-db build --cache-dir ./$(CACHE_DIR) --output-dir ./$(OUT_DIR) --update-interval 24h
 
 .PHONY: db-compact
 db-compact: $(GOBIN)/bbolt out/tunnel.db

@@ -3,7 +3,7 @@ package dbtest
 import (
 	"testing"
 
-	fixtures "github.com/khulnasoft-lab/bolt-fixtures"
+	fixtures "github.com/aquasecurity/bolt-fixtures"
 	"github.com/stretchr/testify/require"
 	"go.khulnasoft.com/tunnel-db/pkg/db"
 )
