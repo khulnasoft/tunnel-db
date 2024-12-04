@@ -71,13 +71,12 @@ db-fetch-langs:
 	wget -qO - https://github.com/bitnami/vulndb/archive/main.tar.gz | tar xz -C $(CACHE_DIR)/bitnami-vulndb --strip-components=1
 	wget -qO - https://github.com/github/advisory-database/archive/refs/heads/main.tar.gz | tar xz -C $(CACHE_DIR)/ghsa --strip-components=1
 	wget -qO - https://github.com/golang/vulndb/archive/refs/heads/master.tar.gz | tar xz -C $(CACHE_DIR)/govulndb --strip-components=1
-	## required to convert GHSA Swift repo links to Cocoapods package names
 	wget -qO - https://github.com/CocoaPods/Specs/archive/master.tar.gz | tar xz -C $(CACHE_DIR)/cocoapods-specs --strip-components=1
 	wget -qO - https://github.com/kubernetes-sigs/cve-feed-osv/archive/main.tar.gz | tar xz -C $(CACHE_DIR)/k8s-cve-feed --strip-components=1
 
 .PHONY: db-build
 db-build: tunnel-db
-	./tunnel-db build --cache-dir ./$(CACHE_DIR) --output-dir ./$(OUT_DIR) --update-interval 24h
+	./tunnel-db build --cache-dir ./$(CACHE_DIR) --update-interval 24h
 
 .PHONY: db-compact
 db-compact: $(GOBIN)/bbolt out/tunnel.db
