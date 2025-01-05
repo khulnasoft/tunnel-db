@@ -4,8 +4,10 @@ import (
 	"time"
 
 	"github.com/urfave/cli"
-	"go.khulnasoft.com/tunnel-db/pkg/utils"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc"
+
+	"github.com/khulnasoft/tunnel-db/pkg/utils"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc"
+	"github.com/urfave/cli"
 )
 
 type AppConfig struct{}

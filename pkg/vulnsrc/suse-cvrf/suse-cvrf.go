@@ -11,11 +11,13 @@ import (
 
 	"github.com/aquasecurity/go-version/pkg/version"
 	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/db"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
-	"go.khulnasoft.com/tunnel-db/pkg/utils"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
 	"golang.org/x/xerrors"
+
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/utils"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	bolt "go.etcd.io/bbolt"
 )
 
 type Distribution int
@@ -270,7 +272,7 @@ func getPackage(packVer string) *Package {
 	}
 }
 
-// reference: https://go.khulnasoft.com/tunnel-db/blob/5c844be3ba6b9ef13df640857a10f8737e360feb/pkg/vulnsrc/redhat/redhat.go#L196-L217
+// reference: https://github.com/khulnasoft/tunnel-db/blob/5c844be3ba6b9ef13df640857a10f8737e360feb/pkg/vulnsrc/redhat/redhat.go#L196-L217
 func splitPkgName(pkgName string) (string, string) {
 	var version string
 

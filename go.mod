@@ -1,4 +1,4 @@
-module go.khulnasoft.com/tunnel-db
+module github.com/khulnasoft/tunnel-db
 
 go 1.22
 

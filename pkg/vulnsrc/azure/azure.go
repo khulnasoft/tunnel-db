@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/db"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/azure/oval"
-	"go.khulnasoft.com/tunnel-db/pkg/vulnsrc/vulnerability"
 	"golang.org/x/xerrors"
+
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/types"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/azure/oval"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	bolt "go.etcd.io/bbolt"
 )
 
 type Distribution int

@@ -2,9 +2,11 @@ package pkg
 
 import (
 	"github.com/urfave/cli"
-	"go.khulnasoft.com/tunnel-db/pkg/db"
-	"go.khulnasoft.com/tunnel-db/pkg/vulndb"
 	"golang.org/x/xerrors"
+
+	"github.com/khulnasoft/tunnel-db/pkg/db"
+	"github.com/khulnasoft/tunnel-db/pkg/vulndb"
+	"github.com/urfave/cli"
 )
 
 func build(c *cli.Context) error {

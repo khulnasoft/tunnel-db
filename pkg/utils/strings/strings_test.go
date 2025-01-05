@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.khulnasoft.com/tunnel-db/pkg/utils/strings"
+
+	"github.com/khulnasoft/tunnel-db/pkg/utils/strings"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnique(t *testing.T) {

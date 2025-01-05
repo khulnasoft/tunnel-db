@@ -1,6 +1,6 @@
 # tunnel-db
 
-![Build DB](https://go.khulnasoft.com/tunnel-db/workflows/Tunnel%20DB/badge.svg)
+![Build DB](https://github.com/khulnasoft/tunnel-db/workflows/Tunnel%20DB/badge.svg)
 [![GitHub Release][release-img]][release]
 ![Downloads][download]
 [![Go Report Card][report-card-img]][report-card]
@@ -9,14 +9,14 @@
 
 [download]: https://img.shields.io/github/downloads/khulnasoft/tunnel-db/total?logo=github
 [release-img]: https://img.shields.io/github/release/khulnasoft/tunnel-db.svg?logo=github
-[release]: https://go.khulnasoft.com/tunnel-db/releases
-[report-card-img]: https://goreportcard.com/badge/go.khulnasoft.com/tunnel-db
-[report-card]: https://goreportcard.com/report/go.khulnasoft.com/tunnel-db
-[go-doc-img]: https://godoc.org/go.khulnasoft.com/tunnel-db?status.svg
-[go-doc]: https://godoc.org/go.khulnasoft.com/tunnel-db
+[release]: https://github.com/khulnasoft/tunnel-db/releases
+[report-card-img]: https://goreportcard.com/badge/github.com/khulnasoft/tunnel-db
+[report-card]: https://goreportcard.com/report/github.com/khulnasoft/tunnel-db
+[go-doc-img]: https://godoc.org/github.com/khulnasoft/tunnel-db?status.svg
+[go-doc]: https://godoc.org/github.com/khulnasoft/tunnel-db
 [code-cov]: https://codecov.io/gh/khulnasoft/tunnel-db/branch/main/graph/badge.svg
 [license-img]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
-[license]: https://go.khulnasoft.com/tunnel-db/blob/main/LICENSE
+[license]: https://github.com/khulnasoft/tunnel-db/blob/main/LICENSE
 
 ## Overview
 

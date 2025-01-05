@@ -3,9 +3,9 @@ package db
 import (
 	"encoding/json"
 
-	bolt "go.etcd.io/bbolt"
-	"go.khulnasoft.com/tunnel-db/pkg/types"
 	"golang.org/x/xerrors"
+
+	"github.com/khulnasoft/tunnel-db/pkg/types"
 )
 
 const (
