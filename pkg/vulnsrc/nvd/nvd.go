@@ -16,6 +16,7 @@ import (
 	gocvss40 "github.com/pandatix/go-cvss/40"
 	"github.com/samber/lo"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
 )
 
 const (

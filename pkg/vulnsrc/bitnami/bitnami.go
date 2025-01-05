@@ -5,11 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/osv"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	"golang.org/x/xerrors"
 )
 
 var bitnamiDir = filepath.Join("bitnami-vulndb", "data")

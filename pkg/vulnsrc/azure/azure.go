@@ -7,14 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	bolt "go.etcd.io/bbolt"
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/azure/oval"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
 )
 
 type Distribution int
@@ -134,7 +132,7 @@ func resolveDefinitions(defs []oval.Definition, tests map[string]resolvedTest) [
 	for _, def := range defs {
 		// `Criterion` may contain a multiple testRefs
 		// e.g. `earlier than 1.20.7-1` and `greater than 0.0.0`
-		// cf. https://github.com/khulnasoft/vuln-list-update/pull/313
+		// cf. https://github.com/aquasecurity/vuln-list-update/pull/313
 		for _, criterion := range def.Criteria.Criterion {
 			// `tests` contains only supported operators
 			test, ok := tests[criterion.TestRef]

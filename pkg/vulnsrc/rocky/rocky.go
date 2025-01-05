@@ -15,6 +15,8 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 	"github.com/samber/lo"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/exp/slices"
+	"golang.org/x/xerrors"
 )
 
 const (

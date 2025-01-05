@@ -9,7 +9,6 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/bbolt"
-
 )
 
 func TestInit(t *testing.T) {

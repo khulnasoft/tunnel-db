@@ -15,6 +15,9 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
+	"k8s.io/utils/clock"
+	fake "k8s.io/utils/clock/testing"
 )
 
 type fakeVulnSrc struct{}

@@ -3,8 +3,6 @@ package ints_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/khulnasoft/tunnel-db/pkg/utils/ints"
 	"github.com/stretchr/testify/assert"
 )

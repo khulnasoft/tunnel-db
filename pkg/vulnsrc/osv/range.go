@@ -3,13 +3,14 @@ package osv
 import (
 	"fmt"
 
+	mvn "github.com/masahiro331/go-mvn-version"
+	"golang.org/x/xerrors"
+
 	"github.com/aquasecurity/go-gem-version"
 	"github.com/aquasecurity/go-npm-version/pkg"
 	pep440 "github.com/aquasecurity/go-pep440-version"
 	"github.com/aquasecurity/go-version/pkg/semver"
 	"github.com/aquasecurity/go-version/pkg/version"
-	mvn "github.com/masahiro331/go-mvn-version"
-	"golang.org/x/xerrors"
 )
 
 type VersionRange interface {

@@ -5,6 +5,7 @@ import (
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/alma"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/alpine"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/amazon"
+	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/aqua"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/azure"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/bitnami"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/bundler"
@@ -66,5 +67,7 @@ var (
 		ghsa.NewVulnSrc(),
 		glad.NewVulnSrc(),
 		govulndb.NewVulnSrc(), // For Go stdlib packages
+
+		aqua.NewVulnSrc(),
 	}
 )

@@ -3,8 +3,6 @@ package strings_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/khulnasoft/tunnel-db/pkg/utils/strings"
 	"github.com/stretchr/testify/assert"
 )

@@ -18,6 +18,9 @@ import (
 	gocvss31 "github.com/pandatix/go-cvss/31"
 	"github.com/samber/lo"
 	bolt "go.etcd.io/bbolt"
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
+	"golang.org/x/xerrors"
 )
 
 type Advisory struct {

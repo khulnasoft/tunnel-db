@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"path/filepath"
 
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/osv"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
+	"golang.org/x/xerrors"
 )
 
 const sourceID = vulnerability.GoVulnDB

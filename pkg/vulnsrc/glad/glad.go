@@ -7,17 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	bolt "go.etcd.io/bbolt"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/bucket"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	"golang.org/x/xerrors"
 )
 
 const (

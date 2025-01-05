@@ -8,12 +8,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	bolt "go.etcd.io/bbolt"
-	"golang.org/x/xerrors"
-
 	"github.com/khulnasoft/tunnel-db/pkg/log"
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/xerrors"
 )
 
 type CustomPut func(dbc Operation, tx *bolt.Tx, adv interface{}) error

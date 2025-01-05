@@ -3,11 +3,10 @@ package dbtest
 import (
 	"testing"
 
-	fixtures "github.com/aquasecurity/bolt-fixtures"
-	"github.com/stretchr/testify/require"
-
 	"github.com/khulnasoft/tunnel-db/pkg/db"
 	"github.com/stretchr/testify/require"
+
+	fixtures "github.com/aquasecurity/bolt-fixtures"
 )
 
 func InitDB(t *testing.T, fixtureFiles []string) string {

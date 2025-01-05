@@ -3,8 +3,6 @@ package pkg
 import (
 	"time"
 
-	"github.com/urfave/cli"
-
 	"github.com/khulnasoft/tunnel-db/pkg/utils"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc"
 	"github.com/urfave/cli"
@@ -39,6 +37,11 @@ func (ac *AppConfig) NewApp(version string) *cli.App {
 					Name:  "cache-dir",
 					Usage: "cache directory path",
 					Value: utils.CacheDir(),
+				},
+				cli.StringFlag{
+					Name:  "output-dir",
+					Usage: "output directory path",
+					Value: "out",
 				},
 				cli.DurationFlag{
 					Name:   "update-interval",

@@ -3,8 +3,6 @@ package bucket_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/khulnasoft/tunnel-db/pkg/types"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/bucket"
 	"github.com/khulnasoft/tunnel-db/pkg/vulnsrc/vulnerability"
